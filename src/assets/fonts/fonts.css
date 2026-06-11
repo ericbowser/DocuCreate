@@ -1,0 +1,65 @@
+/**
+ * Self-hosted fonts (SIL Open Font License)
+ * - Source Sans 3: UI, blog headings, app chrome
+ * - Libre Baskerville: lease documents (Baskerville — common in legal/contract typography)
+ * - Literata: blog body (designed for long-form screen reading)
+ */
+
+/* ── Source Sans 3 (variable) — UI ── */
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('./source-sans-3-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('./source-sans-3-latin-wght-italic.woff2') format('woff2-variations');
+}
+
+/* ── Libre Baskerville — lease documents ── */
+@font-face {
+  font-family: 'Libre Baskerville';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('./libre-baskerville-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Libre Baskerville';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 400;
+  src: url('./libre-baskerville-latin-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Libre Baskerville';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('./libre-baskerville-latin-700-normal.woff2') format('woff2');
+}
+
+/* ── Literata (variable) — blog body ── */
+@font-face {
+  font-family: 'Literata';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('./literata-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Literata';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('./literata-latin-wght-italic.woff2') format('woff2-variations');
+}

@@ -1,0 +1,48 @@
+# ── Secrets & environment ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ── Dependencies & build output ─────────────────────────────
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Tailwind watch artifact (app imports src/index.css)
+src/output.css
+
+# ── Runtime / user-generated server data ──────────────────────
+# Encrypted leases, blog comments, and any future JSON stores
+server/data/
+
+# ── Logs & debug ──────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── OS & editor ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Test / coverage ───────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Misc local tooling ────────────────────────────────────────
+.cursor/
+*.pem
+*.key
+credentials.json
