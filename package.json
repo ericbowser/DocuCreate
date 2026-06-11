@@ -10,6 +10,7 @@
     "dev:full": "npm run dev",
     "build": "vite build",
     "preview": "vite preview",
+    "tail": "tailwindcss -i ./src/index.css -o ./src/output.css",
     "tail:watch": "tailwindcss -i ./src/index.css -o ./src/output.css --watch"
   },
   "dependencies": {
