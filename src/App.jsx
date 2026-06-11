@@ -1,30 +1,35 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext'
 import AppLayout from './components/AppLayout'
-import Home    from './pages/Home'
-import Preview from './pages/Preview'
-import Sign    from './pages/Sign'
-import About   from './pages/About'
-import Legal   from './pages/Legal'
-import Blog    from './pages/Blog'
-import BlogPost from './pages/BlogPost'
+import PageLoader from './components/PageLoader'
+import Home from './pages/Home'
+
+const Preview = lazy(() => import('./pages/Preview'))
+const Sign = lazy(() => import('./pages/Sign'))
+const About = lazy(() => import('./pages/About'))
+const Legal = lazy(() => import('./pages/Legal'))
+const Blog = lazy(() => import('./pages/Blog'))
+const BlogPost = lazy(() => import('./pages/BlogPost'))
 
 function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/"             element={<Home />} />
-            <Route path="/preview/:documentId" element={<Preview />} />
-            <Route path="/preview"      element={<Preview />} />
-            <Route path="/sign/:token"  element={<Sign />} />
-            <Route path="/about"        element={<About />} />
-            <Route path="/legal"        element={<Legal />} />
-            <Route path="/blog"         element={<Blog />} />
-            <Route path="/blog/:slug"   element={<BlogPost />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/"             element={<Home />} />
+              <Route path="/preview/:documentId" element={<Preview />} />
+              <Route path="/preview"      element={<Preview />} />
+              <Route path="/sign/:token"  element={<Sign />} />
+              <Route path="/about"        element={<About />} />
+              <Route path="/legal"        element={<Legal />} />
+              <Route path="/blog"         element={<Blog />} />
+              <Route path="/blog/:slug"   element={<BlogPost />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ThemeProvider>
   )

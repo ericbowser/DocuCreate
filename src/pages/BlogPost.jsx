@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PageMeta from '../components/PageMeta'
 import CommentSection from '../components/CommentSection'
 import { LegalNotice } from '../components/LegalNotice'
 import {
   getPostBySlug,
+  loadPostContent,
   formatPostDate,
   getStateLabel,
   BLOG_POSTS,
@@ -12,6 +14,23 @@ import {
 export default function BlogPost() {
   const { slug } = useParams()
   const post = getPostBySlug(slug)
+  const [Content, setContent] = useState(null)
+  const [contentReady, setContentReady] = useState(false)
+
+  useEffect(() => {
+    if (!post) return undefined
+    let cancelled = false
+    setContent(null)
+    setContentReady(false)
+    loadPostContent(slug).then((Loaded) => {
+      if (cancelled) return
+      setContent(() => Loaded)
+      setContentReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug, post])
 
   if (!post) {
     return (
@@ -26,7 +45,6 @@ export default function BlogPost() {
     )
   }
 
-  const { Content } = post
   const related = BLOG_POSTS.filter(
     (p) => p.slug !== post.slug && (p.state === post.state || p.tags.some((t) => post.tags.includes(t))),
   ).slice(0, 3)
@@ -63,7 +81,13 @@ export default function BlogPost() {
           </header>
 
           <div className="blog-prose">
-            <Content />
+            {!contentReady ? (
+              <p className="text-muted" role="status" aria-live="polite">Loading article…</p>
+            ) : Content ? (
+              <Content />
+            ) : (
+              <p className="text-muted">This article could not be loaded.</p>
+            )}
           </div>
 
           <div className="mt-8 pt-6 border-t border-line dark:border-white/10">

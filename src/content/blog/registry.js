@@ -1,30 +1,25 @@
 /**
- * Blog registry — add a new post in two steps:
- * 1. Create src/content/blog/posts/your-slug.jsx exporting `meta` and `Content`
- * 2. Import it below and add to POST_MODULES
+ * Blog registry — add a new post in one step:
+ * Create src/content/blog/posts/your-slug.jsx exporting `meta` and `Content`.
+ * Listing uses meta only; article body loads on demand per slug.
  */
-import * as essentialLeaseClauses from './posts/essential-lease-clauses.jsx'
-import * as securityDepositGuide from './posts/security-deposit-guide.jsx'
-import * as californiaBasics from './posts/california-landlord-tenant-basics.jsx'
-import * as texasGuide from './posts/texas-lease-agreements-guide.jsx'
-import * as roomRentalGuide from './posts/room-rental-lease-guide.jsx'
 import { STATE_LAWS } from '../../data/stateLaws'
 
-const POST_MODULES = [
-  essentialLeaseClauses,
-  securityDepositGuide,
-  californiaBasics,
-  texasGuide,
-  roomRentalGuide,
-]
+const metaModules = import.meta.glob('./posts/*.jsx', { eager: true, import: 'meta' })
+const contentModules = import.meta.glob('./posts/*.jsx', { import: 'Content' })
 
-export const BLOG_POSTS = POST_MODULES.map((mod) => ({
-  ...mod.meta,
-  Content: mod.Content,
-})).sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+export const BLOG_POSTS = Object.values(metaModules).sort(
+  (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt),
+)
 
 export function getPostBySlug(slug) {
   return BLOG_POSTS.find((p) => p.slug === slug) ?? null
+}
+
+export function loadPostContent(slug) {
+  const loader = contentModules[`./posts/${slug}.jsx`]
+  if (!loader) return Promise.resolve(null)
+  return loader().then((mod) => mod.Content ?? null)
 }
 
 export function getAllSlugs() {

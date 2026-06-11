@@ -8,6 +8,27 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('@react-pdf')) return 'react-pdf'
+            if (id.includes('react-icons')) return 'react-icons'
+            if (id.includes('node_modules/react-hook-form')) return 'vendor-forms'
+            if (id.includes('node_modules/react-router') || id.includes('node_modules/@remix-run')) {
+              return 'vendor-router'
+            }
+            if (
+              id.includes('node_modules/react-dom')
+              || id.includes('node_modules/react/jsx-runtime')
+              || id.includes('node_modules/react/index')
+            ) {
+              return 'vendor-react'
+            }
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         '/api': {
