@@ -49,8 +49,8 @@ export default function Blog() {
       />
       <div className="blog-layout space-y-6">
         <header className="card-surface p-10 sm:p-14">
-          <h1 className="text-3xl font-bold text-heading tracking-tight">Blog</h1>
-          <p className="font-blog text-muted text-lg sm:text-xl mt-4 leading-relaxed">
+          <h1 className="blog-title blog-title--page">Blog</h1>
+          <p className="blog-subtitle mt-4">
             Guides on leases, deposits, room rentals, and state-level landlord-tenant topics. Educational
             content only — not legal advice.
           </p>

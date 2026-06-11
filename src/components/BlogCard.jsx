@@ -14,12 +14,12 @@ export default function BlogCard({ post }) {
           </span>
         ))}
       </div>
-      <h2 className="text-xl font-semibold text-heading mb-2 leading-snug">
-        <Link to={`/blog/${post.slug}`} className="hover:text-accent dark:hover:text-ember-300 transition-colors">
+      <h2 className="blog-title blog-title--card">
+        <Link to={`/blog/${post.slug}`}>
           {post.title}
         </Link>
       </h2>
-      <p className="font-blog text-lg text-muted leading-relaxed mb-3">{post.excerpt}</p>
+      <p className="blog-subtitle text-base sm:text-lg mb-3">{post.excerpt}</p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-subtle">
         <time dateTime={post.publishedAt}>{formatPostDate(post.publishedAt)}</time>
         <span aria-hidden="true">·</span>

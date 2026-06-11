@@ -51,8 +51,8 @@ export default function BlogPost() {
                 </Link>
               ))}
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-heading leading-tight tracking-tight">{post.title}</h1>
-            <p className="blog-excerpt mt-4">{post.excerpt}</p>
+            <h1 className="blog-title blog-title--hero">{post.title}</h1>
+            <p className="blog-excerpt">{post.excerpt}</p>
             <p className="text-muted text-sm sm:text-base mt-4">
               <time dateTime={post.publishedAt}>{formatPostDate(post.publishedAt)}</time>
               {post.updatedAt !== post.publishedAt && (
