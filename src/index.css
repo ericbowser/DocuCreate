@@ -3,31 +3,39 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────
-   BASE — typography & Ember Night background
+   BASE — typography & page background
    ───────────────────────────────────────────────────────────── */
 @layer base {
   html {
-    background: #eef1f6;
+    font-size: 18px;
+    background: radial-gradient(
+      ellipse 100% 75% at 50% 0%,
+      #dbeafe 0%,
+      #eef1f6 42%,
+      #e2e8f0 100%
+    );
+    background-attachment: fixed;
     min-height: 100vh;
   }
 
+  @media (min-width: 640px) {
+    html {
+      font-size: 20px;
+    }
+  }
+
   body {
-    @apply font-sans text-ink antialiased;
+    @apply font-sans text-base leading-relaxed text-ink antialiased;
     background: transparent;
     min-height: 100vh;
   }
 
   html.dark {
     color-scheme: dark;
-    background: radial-gradient(
-      ellipse 120% 100% at 50% 50%,
-      #93c5fd 0%,
-      #60a5fa 10%,
-      #3b82f6 22%,
-      #1e3a8a 42%,
-      #0a0f1a 68%,
-      #000000 100%
-    );
+    background:
+      radial-gradient(ellipse 70% 55% at 50% 38%, rgba(37, 99, 235, 0.26) 0%, rgba(37, 99, 235, 0.07) 38%, transparent 72%),
+      radial-gradient(ellipse 85% 65% at 50% 100%, rgba(30, 58, 138, 0.32) 0%, transparent 58%),
+      radial-gradient(ellipse 120% 100% at 50% 50%, #261c20 0%, #1c1418 36%, #0d0e1f 70%, #08090f 100%);
     background-attachment: fixed;
     min-height: 100vh;
   }
@@ -164,7 +172,7 @@
   }
 
   .input-field {
-    @apply w-full rounded-xl px-3.5 py-2.5 text-sm
+    @apply w-full rounded-xl px-3.5 py-2.5 text-base
       border focus:outline-none focus:ring-2 focus:ring-ember-600 transition-all
       bg-white dark:bg-surface-input
       text-ink dark:text-white
@@ -177,13 +185,13 @@
   }
 
   .btn-secondary {
-    @apply px-4 py-2 border card-border rounded-lg text-sm transition-colors
+    @apply px-4 py-2.5 border card-border rounded-lg text-base transition-colors
       text-ink-secondary dark:text-white
       hover:bg-slate-200/70;
   }
 
   .btn-primary {
-    @apply px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors;
+    @apply px-4 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-base font-medium transition-colors;
   }
 
   .info-panel {
@@ -202,12 +210,12 @@
 
   .alert-error {
     @apply px-4 py-3 bg-red-50 dark:bg-red-950/50 border border-red-300 dark:border-red-700
-      rounded-xl text-sm text-red-800 dark:text-white;
+      rounded-xl text-base text-red-800 dark:text-white;
   }
 
   .alert-success {
     @apply px-4 py-3 bg-green-50 dark:bg-green-950/50 border border-green-300 dark:border-green-600
-      rounded-xl text-sm text-green-800 dark:text-white;
+      rounded-xl text-base text-green-800 dark:text-white;
   }
 
   /* ── Preview page toolbar ── */
@@ -230,7 +238,7 @@
   }
 
   .lease-nav-label {
-    @apply text-xs font-bold uppercase tracking-widest mb-3
+    @apply text-sm font-bold uppercase tracking-widest mb-3
       text-ink-muted dark:text-white/70;
   }
 
@@ -239,7 +247,7 @@
   }
 
   .lease-nav-pill {
-    @apply text-left text-xs font-medium px-3 py-2 rounded-lg transition-colors
+    @apply text-left text-sm font-medium px-3 py-2 rounded-lg transition-colors
       text-ink-secondary dark:text-white/80
       hover:bg-slate-100;
   }
@@ -752,7 +760,7 @@
 }
 
 .blog-badge {
-  @apply inline-block text-xs font-medium px-2.5 py-0.5 rounded-full
+  @apply inline-block text-sm font-medium px-2.5 py-0.5 rounded-full
     bg-slate-100 text-ink-secondary dark:bg-white/10 dark:text-white/90;
 }
 
@@ -761,7 +769,7 @@
 }
 
 .blog-filter-chip {
-  @apply text-xs font-medium px-3 py-1.5 rounded-full border card-border
+  @apply text-sm font-medium px-3 py-1.5 rounded-full border card-border
     text-muted hover:text-heading transition-colors;
 }
 
@@ -773,22 +781,22 @@
 .blog-prose {
   @apply text-body space-y-6 w-full;
   font-family: "Literata", Georgia, Cambria, "Times New Roman", serif;
-  font-size: 1.25rem;
-  line-height: 1.8;
+  font-size: 1.4375rem;
+  line-height: 1.9;
   letter-spacing: 0.01em;
   font-optical-sizing: auto;
 }
 
 @media (min-width: 640px) {
   .blog-prose {
-    font-size: 1.375rem;
-    line-height: 1.85;
+    font-size: 1.5625rem;
+    line-height: 1.95;
   }
 }
 
 @media (min-width: 640px) {
   .blog-prose h2 {
-    font-size: 1.75rem;
+    font-size: 1.875rem;
   }
 }
 
@@ -815,21 +823,21 @@
 
 .blog-prose .text-sm,
 .blog-prose p.text-muted {
-  font-size: 1.125rem;
-  line-height: 1.75;
+  font-size: 1.25rem;
+  line-height: 1.8;
 }
 
 @media (min-width: 640px) {
   .blog-prose .text-sm,
   .blog-prose p.text-muted {
-    font-size: 1.25rem;
+    font-size: 1.375rem;
   }
 }
 
 .blog-cta {
   @apply info-panel font-sans;
-  font-size: 1.0625rem;
-  line-height: 1.6;
+  font-size: 1.125rem;
+  line-height: 1.65;
 }
 
 .blog-layout {
@@ -871,21 +879,21 @@
 }
 
 .blog-title--hero {
-  @apply text-3xl sm:text-4xl leading-tight;
+  @apply text-4xl sm:text-5xl leading-tight;
 }
 
 .blog-title--page {
-  @apply text-3xl leading-tight;
+  @apply text-4xl leading-tight;
 }
 
 .blog-title--card {
-  @apply text-xl leading-snug mb-3;
+  @apply text-2xl leading-snug mb-3;
 }
 
 /* Blog subtitles / excerpts — softer panel, distinct color */
 .blog-subtitle,
 .blog-excerpt {
-  @apply font-blog text-lg sm:text-xl leading-relaxed;
+  @apply font-blog text-xl sm:text-2xl leading-relaxed;
   color: #334155;
   background: rgba(148, 163, 184, 0.14);
   border-left: 3px solid #94a3b8;
@@ -911,7 +919,7 @@
 /* In-article section headings match title treatment */
 .blog-prose h2 {
   @apply font-sans text-blue-950 dark:text-blue-50 font-semibold mt-10 mb-4;
-  font-size: 1.5rem;
+  font-size: 1.625rem;
   line-height: 1.35;
   letter-spacing: -0.01em;
   background: linear-gradient(105deg, rgba(37, 99, 235, 0.1) 0%, rgba(37, 99, 235, 0.03) 60%, transparent 100%);

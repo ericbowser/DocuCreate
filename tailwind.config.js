@@ -13,8 +13,17 @@ export default {
         blog: ['"Literata"', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
       },
       fontSize: {
-        'blog-body': ['1.125rem', { lineHeight: '1.8', letterSpacing: '0.01em' }],
-        'blog-body-lg': ['1.1875rem', { lineHeight: '1.8', letterSpacing: '0.01em' }],
+        xs: ['0.8125rem', { lineHeight: '1.25rem' }],
+        sm: ['0.9375rem', { lineHeight: '1.5rem' }],
+        base: ['1.0625rem', { lineHeight: '1.625rem' }],
+        lg: ['1.1875rem', { lineHeight: '1.75rem' }],
+        xl: ['1.3125rem', { lineHeight: '1.875rem' }],
+        '2xl': ['1.5625rem', { lineHeight: '2rem' }],
+        '3xl': ['1.9375rem', { lineHeight: '2.25rem' }],
+        '4xl': ['2.375rem', { lineHeight: '2.5rem' }],
+        '5xl': ['3.125rem', { lineHeight: '1.15' }],
+        'blog-body': ['1.1875rem', { lineHeight: '1.85', letterSpacing: '0.01em' }],
+        'blog-body-lg': ['1.25rem', { lineHeight: '1.85', letterSpacing: '0.01em' }],
       },
       colors: {
         ember: {
@@ -55,10 +64,10 @@ export default {
         },
       },
       backgroundImage: {
-        'ember-night': `
-          radial-gradient(ellipse at 15% 0%, #350c0c 0%, #1f0606 22%, transparent 60%),
-          radial-gradient(ellipse at 85% 100%, #1a0404 0%, transparent 50%),
-          linear-gradient(160deg, #1f0707 0%, #0d0404 35%, #060404 65%, #010101 100%)
+        'docu-night': `
+          radial-gradient(ellipse 70% 55% at 50% 38%, rgba(37, 99, 235, 0.26) 0%, rgba(37, 99, 235, 0.07) 38%, transparent 72%),
+          radial-gradient(ellipse 85% 65% at 50% 100%, rgba(30, 58, 138, 0.32) 0%, transparent 58%),
+          radial-gradient(ellipse 120% 100% at 50% 50%, #261c20 0%, #1c1418 36%, #0d0e1f 70%, #08090f 100%)
         `,
       },
     },

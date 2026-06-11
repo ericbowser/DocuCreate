@@ -6,7 +6,7 @@ export default function Footer() {
 
   return (
     <footer className="app-footer">
-      <div className="max-w-6xl mx-auto px-4 py-2.5 text-xs text-subtle flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="max-w-6xl mx-auto px-4 py-4 text-base text-subtle flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <span>
           <span className="font-medium text-heading">{COMPANY_NAME}</span>
           {' · '}{APP_NAME} ·{' '}

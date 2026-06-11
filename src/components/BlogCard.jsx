@@ -19,7 +19,7 @@ export default function BlogCard({ post }) {
           {post.title}
         </Link>
       </h2>
-      <p className="blog-subtitle text-base sm:text-lg mb-3">{post.excerpt}</p>
+      <p className="blog-subtitle mb-3">{post.excerpt}</p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-subtle">
         <time dateTime={post.publishedAt}>{formatPostDate(post.publishedAt)}</time>
         <span aria-hidden="true">·</span>
