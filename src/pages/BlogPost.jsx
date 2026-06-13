@@ -10,6 +10,7 @@ import {
   getStateLabel,
   BLOG_POSTS,
 } from '../content/blog/registry'
+import { SITE_URL } from '../config/brand'
 
 export default function BlogPost() {
   const { slug } = useParams()
@@ -35,6 +36,7 @@ export default function BlogPost() {
   if (!post) {
     return (
       <div className="page-shell page-shell--blog">
+        <PageMeta title="Article not found" noindex canonical={`${SITE_URL}/blog`} />
         <div className="blog-layout card-surface p-10 sm:p-14 text-center">
           <h1 className="text-xl font-bold text-heading mb-2">Article not found</h1>
           <Link to="/blog" className="text-sm text-accent dark:text-ember-300 hover:underline">
@@ -51,7 +53,11 @@ export default function BlogPost() {
 
   return (
     <div className="page-shell page-shell--blog">
-      <PageMeta title={post.title} description={post.excerpt} />
+      <PageMeta
+        title={post.title}
+        description={post.excerpt}
+        canonical={`${SITE_URL}/blog/${post.slug}`}
+      />
       <div className="blog-layout">
         <article className="card-surface p-10 sm:p-14">
           <header className="blog-article-header mb-10 pb-8 border-b border-line dark:border-white/10">

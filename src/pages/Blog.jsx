@@ -10,13 +10,14 @@ import {
   getPostsByState,
   getStateLabel,
 } from '../content/blog/registry'
-import { APP_NAME } from '../config/brand'
+import { APP_NAME, SITE_URL } from '../config/brand'
 
 export default function Blog() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tagFilter = searchParams.get('tag') || ''
   const stateFilter = searchParams.get('state') || ''
   const [query, setQuery] = useState('')
+  const isFiltered = Boolean(tagFilter || stateFilter)
 
   const filtered = useMemo(() => {
     let list = BLOG_POSTS
@@ -46,6 +47,8 @@ export default function Blog() {
       <PageMeta
         title="Blog"
         description={`Landlord and tenant guides, lease tips, and state-specific rental law overviews from ${APP_NAME}.`}
+        canonical={`${SITE_URL}/blog`}
+        noindex={isFiltered}
       />
       <div className="blog-layout space-y-6">
         <header className="card-surface p-10 sm:p-14">
