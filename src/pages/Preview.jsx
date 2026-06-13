@@ -3,8 +3,12 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { PDFDownloadLink } from '@react-pdf/renderer'
 import LeaseDocument from '../components/LeaseDocument'
 import LeaseAgreementView from '../components/LeaseAgreementView'
-import { apiUrl, parseJsonResponse } from '../utils/fetchApi'
-import { hydrateWizardFromLease, clearWizardDraft, getEditingDocumentId } from '../utils/wizardStorage'
+import { apiFetch, parseJsonResponse } from '../utils/fetchApi'
+import { hydrateWizardFromLease, clearSensitiveClientData, getEditingDocumentId, getDocumentAccessToken, rememberRecentDocument } from '../utils/wizardStorage'
+import { buildResumeBundle, downloadResumeBundle } from '../utils/leaseResume'
+import { useAccessPolicy } from '../hooks/useAccessPolicy'
+import { validateRecoveryPin } from '../config/recoveryPin'
+import PageMeta from '../components/PageMeta'
 import {
   HiArrowDownTray,
   HiOutlineEnvelope,
@@ -15,6 +19,7 @@ import {
 } from '../icons'
 
 export default function Preview() {
+  const { documentIdOnlyAccess, recoveryPasswordEnabled } = useAccessPolicy()
   const { documentId }  = useParams()
   const [searchParams]  = useSearchParams()
   const navigate        = useNavigate()
@@ -32,12 +37,22 @@ export default function Preview() {
   const [sending,     setSending]     = useState(false)
   const [sent,        setSent]        = useState(false)
   const [sendError,   setSendError]   = useState(null)
-  const [signToken,   setSignToken]   = useState(null)
+  const [resending,   setResending]   = useState(null)
+  const [resendNote,  setResendNote]  = useState(null)
+  const [tenantToken, setTenantToken] = useState(null)
+  const [landlordToken, setLandlordToken] = useState(null)
+  const [signing,     setSigning]     = useState(null)
   const [editing,     setEditing]     = useState(false)
   const [editError,   setEditError]   = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting,    setDeleting]    = useState(false)
   const [deleteError, setDeleteError] = useState(null)
+  const [hasRecoveryPassword, setHasRecoveryPassword] = useState(false)
+  const [recoveryPw, setRecoveryPw] = useState('')
+  const [recoveryPwConfirm, setRecoveryPwConfirm] = useState('')
+  const [recoverySaving, setRecoverySaving] = useState(false)
+  const [recoveryError, setRecoveryError] = useState(null)
+  const [recoverySaved, setRecoverySaved] = useState(false)
 
   const fetchDocument = useCallback(async () => {
     if (!documentId) {
@@ -47,19 +62,38 @@ export default function Preview() {
     setLoading(true)
     setLoadError(null)
     try {
-      const res  = await fetch(apiUrl(`/api/documents/${documentId}`))
+      const res  = await apiFetch(`/api/documents/${documentId}`, { documentId })
       const data = await parseJsonResponse(res)
-      if (!res.ok) throw new Error(data.error || 'Document not found')
+      if (!res.ok) {
+        if (res.status === 403 && data.code === 'ACCESS_TOKEN_REQUIRED') {
+          throw new Error(
+            documentIdOnlyAccess
+              ? 'Could not open this lease. Check the document ID and try again.'
+              : 'This preview link is missing its access key. Use “Resume a lease” on the home page with your document ID and PIN, or open your lease file.',
+          )
+        }
+        throw new Error(data.error || 'Document not found')
+      }
       setLeaseData(data.leaseData)
       setPaid(data.paid)
       setPaymentBypassed(data.paymentBypassed ?? false)
       setPrice(data.price)
+      setHasRecoveryPassword(Boolean(data.hasRecoveryPassword))
+      if (data.leaseData?.tenantName) {
+        rememberRecentDocument(documentId, data.leaseData.tenantName)
+      }
+      if (data.signing) {
+        setSigning(data.signing)
+        setSent(true)
+        setTenantToken(data.signing.tenantToken)
+        setLandlordToken(data.signing.landlordToken)
+      }
     } catch (err) {
       setLoadError(err.message)
     } finally {
       setLoading(false)
     }
-  }, [documentId])
+  }, [documentId, documentIdOnlyAccess])
 
   // Verify Stripe return
   useEffect(() => {
@@ -68,10 +102,11 @@ export default function Preview() {
 
     ;(async () => {
       try {
-        const res = await fetch(apiUrl(`/api/documents/${documentId}/verify-payment`), {
+        const res = await apiFetch(`/api/documents/${documentId}/verify-payment`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ sessionId }),
+          documentId,
         })
         const data = await parseJsonResponse(res)
         if (data.paid && data.leaseData) {
@@ -93,10 +128,11 @@ export default function Preview() {
     setPaying(true)
     setPayError(null)
     try {
-      const res  = await fetch(apiUrl('/api/stripe/create-checkout-session'), {
+      const res  = await apiFetch('/api/stripe/create-checkout-session', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ documentId }),
+        documentId,
       })
       const data = await parseJsonResponse(res)
       if (!res.ok) throw new Error(data.error || 'Checkout failed')
@@ -120,7 +156,7 @@ export default function Preview() {
     try {
       let data = leaseData
       if (!data || data._preview) {
-        const res = await fetch(apiUrl(`/api/documents/${documentId}/edit`))
+        const res = await apiFetch(`/api/documents/${documentId}/edit`, { documentId })
         const json = await parseJsonResponse(res)
         if (!res.ok) throw new Error(json.error || 'Could not load lease for editing')
         data = json.leaseData
@@ -139,10 +175,10 @@ export default function Preview() {
     setDeleting(true)
     setDeleteError(null)
     try {
-      const res = await fetch(apiUrl(`/api/documents/${documentId}`), { method: 'DELETE' })
+      const res = await apiFetch(`/api/documents/${documentId}`, { method: 'DELETE', documentId })
       const data = await parseJsonResponse(res)
       if (!res.ok) throw new Error(data.error || 'Could not delete lease')
-      if (getEditingDocumentId() === documentId) clearWizardDraft()
+      if (getEditingDocumentId() === documentId) clearSensitiveClientData()
       navigate('/', { replace: true })
     } catch (err) {
       setDeleteError(err.message)
@@ -152,23 +188,140 @@ export default function Preview() {
     }
   }
 
+  const handleSetRecoveryPassword = async (e) => {
+    e.preventDefault()
+    if (!documentId) return
+    const pinError = validateRecoveryPin(recoveryPw)
+    if (pinError) {
+      setRecoveryError(pinError)
+      return
+    }
+    if (recoveryPw !== recoveryPwConfirm) {
+      setRecoveryError('PINs do not match.')
+      return
+    }
+    setRecoverySaving(true)
+    setRecoveryError(null)
+    try {
+      const res = await apiFetch(`/api/documents/${documentId}/recovery-password`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ password: recoveryPw }),
+        documentId,
+      })
+      const data = await parseJsonResponse(res)
+      if (!res.ok) throw new Error(data.error || 'Could not save PIN')
+      setHasRecoveryPassword(true)
+      setRecoverySaved(true)
+      setRecoveryPw('')
+      setRecoveryPwConfirm('')
+    } catch (err) {
+      setRecoveryError(err.message)
+    } finally {
+      setRecoverySaving(false)
+    }
+  }
+
+  const handleDownloadResume = () => {
+    if (!documentId) return
+    const accessToken = getDocumentAccessToken(documentId)
+    downloadResumeBundle(
+      buildResumeBundle({
+        documentId,
+        accessToken,
+        label: leaseData?.tenantName || leaseData?.landlordName,
+      }),
+      leaseData?.tenantName || 'lease-resume',
+    )
+  }
+
+  const handleEndSession = () => {
+    clearSensitiveClientData()
+    navigate('/', { replace: true })
+  }
+
+  const applySigningResponse = (data) => {
+    const nextSigning = data.signing || (data.tenantToken ? {
+      sent: true,
+      status: 'pending',
+      tenantSigned: false,
+      landlordSigned: false,
+      fullyExecuted: false,
+      tenantToken: data.tenantToken,
+      landlordToken: data.landlordToken,
+    } : null)
+    if (nextSigning) setSigning(nextSigning)
+    if (data.tenantToken || nextSigning?.tenantToken) {
+      setTenantToken(data.tenantToken || nextSigning.tenantToken)
+    }
+    if (data.landlordToken || nextSigning?.landlordToken) {
+      setLandlordToken(data.landlordToken || nextSigning.landlordToken)
+    }
+    setSent(true)
+  }
+
   const handleSend = async () => {
     if (!paid) return
     setSending(true)
     setSendError(null)
+    setResendNote(null)
     try {
-      const res  = await fetch(apiUrl('/api/lease/send'), {
+      const res  = await apiFetch('/api/lease/send', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ documentId }),
+        documentId,
       })
       const data = await parseJsonResponse(res)
-      if (data.success) { setSent(true); setSignToken(data.token) }
-      else setSendError(data.error || 'Failed to send.')
+      if (data.success) {
+        applySigningResponse(data)
+      } else if (data.code === 'ALREADY_SENT' && data.signing) {
+        applySigningResponse({
+          tenantToken: data.signing.tenantToken,
+          landlordToken: data.signing.landlordToken,
+          signing: data.signing,
+        })
+        setSendError('This lease was already sent. Use resend below to email the links again.')
+      } else {
+        setSendError(data.error || 'Failed to send.')
+      }
     } catch {
       setSendError('Could not reach the server. Is it running?')
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleResend = async (party = 'all') => {
+    if (!paid) return
+    setResending(party)
+    setSendError(null)
+    setResendNote(null)
+    try {
+      const res = await apiFetch('/api/lease/resend', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ documentId, party }),
+        documentId,
+      })
+      const data = await parseJsonResponse(res)
+      if (data.success) {
+        applySigningResponse(data)
+        const emailed = data.emailed || []
+        if (emailed.length === 2) {
+          setResendNote('Reminder emails sent to tenant and landlord.')
+        } else if (emailed.includes('tenant')) {
+          setResendNote(`Reminder email sent to ${leaseData.tenantEmail}.`)
+        } else if (emailed.includes('landlord')) {
+          setResendNote(`Reminder email sent to ${leaseData.landlordEmail}.`)
+        }
+      } else {
+        setSendError(data.error || 'Failed to resend.')
+      }
+    } catch {
+      setSendError('Could not reach the server. Is it running?')
+    } finally {
+      setResending(null)
     }
   }
 
@@ -208,9 +361,12 @@ export default function Preview() {
 
   const tenantSlug = leaseData.tenantName?.replace(/\s+/g, '_') ?? 'document'
   const paymentCancelled = searchParams.get('payment') === 'cancelled'
+  const signingActive = sent && signing && !signing.fullyExecuted
+  const signingComplete = signing?.fullyExecuted
 
   return (
     <div className="page-shell preview-page">
+      <PageMeta title="Lease Preview" noindex privateSession />
       <div className="max-w-6xl mx-auto">
 
         <header className="preview-toolbar no-print">
@@ -235,6 +391,14 @@ export default function Preview() {
                 className="btn-secondary"
               >
                 {editing ? 'Loading…' : '← Edit'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleEndSession}
+                className="btn-secondary text-sm"
+              >
+                End session
               </button>
 
               {!showDeleteConfirm ? (
@@ -298,12 +462,23 @@ export default function Preview() {
                         ? <><span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Sending…</>
                         : <><HiOutlineEnvelope className="w-4 h-4" aria-hidden="true" /> Send for E-Signature</>}
                     </button>
-                  ) : (
+                  ) : signingComplete ? (
                     <span className="px-4 py-2 bg-green-950/50 border border-green-600 rounded-lg text-sm text-green-200 font-medium">
                       <span className="inline-flex items-center gap-1.5">
-                        <HiCheck className="w-4 h-4" aria-hidden="true" /> Sent to {leaseData.tenantEmail}
+                        <HiCheck className="w-4 h-4" aria-hidden="true" /> Fully signed
                       </span>
                     </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleResend('all')}
+                      disabled={Boolean(resending)}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-500/60 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      {resending === 'all'
+                        ? <><span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Resending…</>
+                        : <><HiOutlineEnvelope className="w-4 h-4" aria-hidden="true" /> Resend Emails</>}
+                    </button>
                   )}
                 </>
               ) : !paymentBypassed && (
@@ -332,23 +507,97 @@ export default function Preview() {
         {deleteError && <div className="alert-error no-print mb-4">{deleteError}</div>}
         {showDeleteConfirm && sent && (
           <div className="warn-panel no-print mb-4 text-sm">
-            This lease was sent for e-signature. Deleting removes the stored document; any signing link already emailed may no longer match an active record.
+            This lease was sent for e-signature. Deleting removes the stored document; any signing links already emailed may no longer match an active record.
           </div>
         )}
         {payError && <div className="alert-error no-print mb-4">{payError}</div>}
         {sendError && <div className="alert-error no-print mb-4">{sendError}</div>}
-        {sent && (
+        {resendNote && <div className="alert-success no-print mb-4">{resendNote}</div>}
+        {signingActive && (
           <div className="alert-success no-print mb-4">
             <span className="inline-flex items-center gap-1.5">
               <HiCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Signing request sent to <strong>{leaseData.tenantEmail}</strong>.</span>
+              <span>
+                Awaiting signatures — tenant:{' '}
+                <strong>{signing.tenantSigned ? 'signed' : 'pending'}</strong>
+                {' · '}
+                landlord:{' '}
+                <strong>{signing.landlordSigned ? 'signed' : 'pending'}</strong>
+              </span>
             </span>
-            {signToken && (
-              <span className="block mt-1 text-xs opacity-90">
-                Signing link:{' '}
-                <code className="bg-black/30 px-1.5 py-0.5 rounded text-white">
-                  {window.location.origin}/sign/{signToken}
-                </code>
+            {(tenantToken || landlordToken) && (
+              <span className="block mt-2 text-xs opacity-90 space-y-1">
+                {tenantToken && !signing.tenantSigned && (
+                  <span className="block">
+                    Tenant link:{' '}
+                    <code className="bg-black/30 px-1.5 py-0.5 rounded text-white">
+                      {window.location.origin}/sign/{tenantToken}
+                    </code>
+                  </span>
+                )}
+                {landlordToken && !signing.landlordSigned && (
+                  <span className="block">
+                    Your link (landlord):{' '}
+                    <code className="bg-black/30 px-1.5 py-0.5 rounded text-white">
+                      {window.location.origin}/sign/{landlordToken}
+                    </code>
+                  </span>
+                )}
+              </span>
+            )}
+            <span className="block mt-3 text-xs opacity-90">
+              Resend to:{' '}
+              {!signing.tenantSigned && (
+                <button
+                  type="button"
+                  onClick={() => handleResend('tenant')}
+                  disabled={Boolean(resending)}
+                  className="underline hover:no-underline disabled:opacity-60"
+                >
+                  {resending === 'tenant' ? 'Sending…' : 'tenant only'}
+                </button>
+              )}
+              {!signing.tenantSigned && !signing.landlordSigned && ' · '}
+              {!signing.landlordSigned && (
+                <button
+                  type="button"
+                  onClick={() => handleResend('landlord')}
+                  disabled={Boolean(resending)}
+                  className="underline hover:no-underline disabled:opacity-60"
+                >
+                  {resending === 'landlord' ? 'Sending…' : 'landlord only'}
+                </button>
+              )}
+            </span>
+          </div>
+        )}
+        {sent && !signingActive && !signingComplete && (
+          <div className="alert-success no-print mb-4">
+            <span className="inline-flex items-center gap-1.5">
+              <HiCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>
+                Signing requests sent to <strong>{leaseData.tenantEmail}</strong> (tenant) and{' '}
+                <strong>{leaseData.landlordEmail}</strong> (you).
+              </span>
+            </span>
+            {(tenantToken || landlordToken) && (
+              <span className="block mt-2 text-xs opacity-90 space-y-1">
+                {tenantToken && (
+                  <span className="block">
+                    Tenant link:{' '}
+                    <code className="bg-black/30 px-1.5 py-0.5 rounded text-white">
+                      {window.location.origin}/sign/{tenantToken}
+                    </code>
+                  </span>
+                )}
+                {landlordToken && (
+                  <span className="block">
+                    Your link (landlord):{' '}
+                    <code className="bg-black/30 px-1.5 py-0.5 rounded text-white">
+                      {window.location.origin}/sign/{landlordToken}
+                    </code>
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -357,6 +606,55 @@ export default function Preview() {
         {paymentBypassed && (
           <div className="info-panel no-print mb-5 text-sm">
             Downloads, printing, and e-signature are free while payments are not enabled. No Stripe account required.
+          </div>
+        )}
+        {!loadError && leaseData && (
+          <div className="info-panel no-print mb-5 text-sm space-y-3">
+            <p className="font-medium text-heading">Landlord access</p>
+            <p className="text-muted">
+              Document ID:{' '}
+              <code className="text-xs bg-black/10 dark:bg-black/30 px-1.5 py-0.5 rounded break-all">{documentId}</code>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={handleDownloadResume} className="btn-secondary text-sm">
+                Download lease file
+              </button>
+            </div>
+            {!hasRecoveryPassword && recoveryPasswordEnabled ? (
+              <form onSubmit={handleSetRecoveryPassword} className="space-y-2 pt-2 border-t border-line dark:border-line-dark">
+                <p className="text-muted">Set a recovery PIN to reopen this lease on another device.</p>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  value={recoveryPw}
+                  onChange={(e) => setRecoveryPw(e.target.value)}
+                  placeholder="PIN (4+ characters)"
+                  className="input-field text-sm"
+                  autoComplete="off"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  value={recoveryPwConfirm}
+                  onChange={(e) => setRecoveryPwConfirm(e.target.value)}
+                  placeholder="Confirm PIN"
+                  className="input-field text-sm"
+                  autoComplete="off"
+                />
+                <button type="submit" disabled={recoverySaving} className="btn-primary text-sm">
+                  {recoverySaving ? 'Saving…' : 'Save recovery PIN'}
+                </button>
+                {recoveryError && <p className="text-red-600 dark:text-red-400 text-xs">{recoveryError}</p>}
+              </form>
+            ) : hasRecoveryPassword && recoveryPasswordEnabled ? (
+              <p className="text-green-700 dark:text-green-300 text-xs">
+                {recoverySaved ? 'Recovery PIN saved.' : 'Recovery PIN is set — use it on the home page to reopen this lease.'}
+              </p>
+            ) : documentIdOnlyAccess ? (
+              <p className="text-muted text-xs pt-2 border-t border-line dark:border-line-dark">
+                Document ID access is enabled — use “Resume a lease” on the home page with this ID to reopen on another device.
+              </p>
+            ) : null}
           </div>
         )}
         {!paid && !paymentBypassed && (

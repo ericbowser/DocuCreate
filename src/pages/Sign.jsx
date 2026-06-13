@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import SignaturePad from '../components/SignaturePad'
 
-import { apiUrl, parseJsonResponse } from '../utils/fetchApi'
+import { apiFetch, parseJsonResponse } from '../utils/fetchApi'
+import { clearSensitiveClientData } from '../utils/wizardStorage'
+import PageMeta from '../components/PageMeta'
 import { resolveVacateNotice } from '../utils/stateLawService'
 import { APP_NAME, COMPANY_NAME } from '../config/brand'
 import {
@@ -15,9 +17,11 @@ import {
 export default function Sign() {
   const { token }    = useParams()
   const [lease,    setLease]    = useState(null)
+  const [party,    setParty]    = useState('tenant')
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [done,     setDone]     = useState(false)
+  const [doneNote, setDoneNote] = useState('')
 
   // Form state
   const [printedName,    setPrintedName]    = useState('')
@@ -26,15 +30,32 @@ export default function Sign() {
   const [submitting,     setSubmitting]     = useState(false)
 
   useEffect(() => {
-    fetch(apiUrl(`/api/lease/${token}`))
+    apiFetch(`/api/lease/${token}`)
       .then(async (r) => {
         const data = await parseJsonResponse(r)
         if (data.error) setError(data.error)
-        else if (data.status === 'signed') setDone(true)
-        else setLease(data)
+        else if (data.fullyExecuted || data.status === 'signed' || data.partySigned) {
+          setParty(data.party || 'tenant')
+          if (data.fullyExecuted || data.status === 'signed') {
+            setDoneNote('All required signatures are on file. A confirmation has been sent to both parties.')
+          } else if (data.party === 'landlord') {
+            setDoneNote('Your signature has been recorded. Waiting for the tenant to sign.')
+          } else {
+            setDoneNote('Your signature has been recorded. Waiting for the landlord to sign.')
+          }
+          setDone(true)
+        } else {
+          setParty(data.party || 'tenant')
+          setLease(data)
+        }
       })
       .catch((err) => setError(err.message || 'Could not load the lease. The link may have expired.'))
       .finally(() => setLoading(false))
+
+    return () => {
+      setLease(null)
+      setSignatureData(null)
+    }
   }, [token])
 
   const canSubmit = printedName.trim().length > 2 &&
@@ -44,7 +65,7 @@ export default function Sign() {
     if (!canSubmit) return
     setSubmitting(true)
     try {
-      const res = await fetch(apiUrl(`/api/lease/${token}/sign`), {
+      const res = await apiFetch(`/api/lease/${token}/sign`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -53,7 +74,17 @@ export default function Sign() {
         }),
       })
       const data = await parseJsonResponse(res)
-      if (data.success) setDone(true)
+      if (data.success) {
+        setDone(true)
+        if (data.status === 'executed') {
+          setDoneNote('All required signatures are on file. A confirmation has been sent to both parties.')
+        } else if (party === 'landlord') {
+          setDoneNote('Your signature has been recorded. Waiting for the tenant to sign.')
+        } else {
+          setDoneNote('Your signature has been recorded. Waiting for the landlord to sign.')
+        }
+        clearSensitiveClientData()
+      }
       else setError(data.error || 'Signing failed.')
     } catch {
       setError('Signing failed. Please try again.')
@@ -62,7 +93,12 @@ export default function Sign() {
     }
   }
 
-  if (loading) return <Centered><Spinner />Loading your lease...</Centered>
+  if (loading) return (
+    <>
+      <PageMeta title="Sign Lease" noindex privateSession />
+      <Centered><Spinner />Loading your lease...</Centered>
+    </>
+  )
 
   if (error) return (
     <Centered>
@@ -81,16 +117,18 @@ export default function Sign() {
           <HiOutlineCheckCircle className="w-9 h-9 text-green-700 dark:text-green-300" aria-hidden="true" />
         </div>
         <h2 className="text-xl font-bold text-heading">Lease Signed!</h2>
-        <p className="text-muted text-sm max-w-xs">
-          Your signature has been recorded. A confirmation has been sent to both you and your landlord.
+        <p className="text-muted text-sm max-w-sm">
+          {doneNote || 'Your signature has been recorded.'}
         </p>
       </div>
     </Centered>
   )
 
   const d = lease.leaseData
+  const isLandlord = party === 'landlord'
   const isMonthly = d.leaseType === 'Month-to-Month'
   const { landlordNoticeDays, tenantNoticeDays } = resolveVacateNotice(d)
+  const defaultName = isLandlord ? d.landlordName : d.tenantName
 
   return (
     <div className="page-shell">
@@ -98,9 +136,13 @@ export default function Sign() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-heading">Review &amp; Sign Your Lease</h1>
+          <h1 className="text-2xl font-bold text-heading">
+            {isLandlord ? 'Review & Sign as Landlord' : 'Review & Sign Your Lease'}
+          </h1>
           <p className="text-sm text-muted mt-1">
-            Please review the terms below, then sign at the bottom to accept.
+            {isLandlord
+              ? 'Please review the terms below, then sign to complete your side of the agreement.'
+              : 'Please review the terms below, then sign at the bottom to accept.'}
           </p>
         </div>
 
@@ -157,7 +199,7 @@ export default function Sign() {
               type="text"
               value={printedName}
               onChange={e => setPrintedName(e.target.value)}
-              placeholder={d.tenantName || 'Enter your full legal name'}
+              placeholder={defaultName || 'Enter your full legal name'}
               className="input-field"
             />
           </div>

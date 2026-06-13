@@ -1,8 +1,8 @@
-# Docu Create
+# DocuCreate
 
 **State-informed lease agreements** for U.S. landlords — [docu-create.com](https://docu-create.com)
 
-Docu Create is a self-service web app that walks you through a lease wizard, applies state-level reference rules (deposits, notice periods, disclosures, and more), and produces a printable PDF with optional tenant e-signature. It is operated by Execute & Engrave LLC and is **not a law firm**; generated documents are starting points, not legal advice.
+DocuCreate is a self-service web app that walks you through a lease wizard, applies state-level reference rules (deposits, notice periods, disclosures, and more), and produces a printable PDF with optional tenant e-signature. It is operated by Execute & Engrave LLC and is **not a law firm**; generated documents are starting points, not legal advice.
 
 ## Features
 
@@ -85,7 +85,10 @@ Copy `.env.example` to `.env` in the **project root** (not `src/.env`). Never co
 | `npm run server` | API only |
 | `npm run build` | Production frontend build → `dist/` |
 | `npm run preview` | Preview production build |
-| `npm run tail:watch` | Optional Tailwind watch (app uses `src/index.css`) |
+| `npm run clean` | Remove build output, caches, and runtime data |
+| `npm test` | Run Jest + React Testing Library tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |
 
 ## Project structure
 
@@ -111,12 +114,15 @@ DocuCreate/
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/documents/create` | Create encrypted lease |
-| `GET` | `/api/documents/:id` | Preview (masked if unpaid) |
-| `GET` | `/api/documents/:id/edit` | Full data for wizard edit |
-| `PATCH` | `/api/documents/:id` | Update lease |
-| `DELETE` | `/api/documents/:id` | Delete lease |
-| `POST` | `/api/lease/send` | Email signing link |
+| `POST` | `/api/documents/create` | Create encrypted lease; returns `documentId` + one-time `accessToken` |
+| `GET` | `/api/documents/:id` | Preview (requires `X-Doc-Access`; masked if unpaid) |
+| `GET` | `/api/documents/:id/edit` | Full data for wizard edit (requires access token) |
+| `PATCH` | `/api/documents/:id` | Update lease (requires access token) |
+| `DELETE` | `/api/documents/:id` | Delete lease (requires access token) |
+| `POST` | `/api/documents/unlock` | Landlord recovery: `{ documentId, password }` → new session `accessToken` (PIN, 4+ chars) |
+| `POST` | `/api/documents/:id/recovery-password` | Set landlord recovery PIN (requires access token) |
+| `POST` | `/api/lease/send` | Email signing links to tenant and landlord |
+| `POST` | `/api/lease/resend` | Resend pending signature emails (`party`: `all`, `tenant`, or `landlord`) |
 | `GET` | `/api/health` | Status, payments mode |
 
 ## Deployment notes
@@ -127,6 +133,9 @@ DocuCreate/
 4. Set `VITE_API_URL` at **build time** if the API is on a different origin.
 5. Submit `https://docu-create.com/sitemap.xml` in Google Search Console.
 6. `server/data/` is created at runtime and should live on persistent disk.
+7. **Shared-device privacy:** wizard drafts use obfuscated `sessionStorage` (cleared when the tab closes). API responses for `/api/documents` and `/api/lease` send `Cache-Control: no-store`. In NGINX, do not cache `/api/` — proxy only. Users can click **End session** on preview to wipe client data immediately.
+8. **Document access tokens:** each new lease gets a random `accessToken` stored in the browser session. Document API routes require the `X-Doc-Access` header — the preview URL alone is not enough to read or edit a lease. Unpaid previews return fully redacted PII (no partial name/address fragments).
+9. **Landlord recovery:** optional recovery PIN (4+ characters, numbers OK; hashed in `documents.json`, not `leases.json`) or a downloaded `.docucreate.json` lease file lets landlords reopen a lease without login. Use **Resume a lease** on the home page.
 
 ## Legal
 

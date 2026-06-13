@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiUrl, parseJsonResponse } from '../utils/fetchApi'
+import { apiFetch, parseJsonResponse } from '../utils/fetchApi'
 import { HiOutlineChatBubbleLeftRight } from '../icons'
 
 const POLL_MS = 15_000
@@ -22,7 +22,7 @@ export default function CommentSection({ threadId, title = 'Comments' }) {
   const fetchComments = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     try {
-      const res = await fetch(apiUrl(`/api/comments/${encodeURIComponent(threadId)}`))
+      const res = await apiFetch(`/api/comments/${encodeURIComponent(threadId)}`)
       if (!res.ok) throw new Error('Could not load comments')
       const data = await parseJsonResponse(res)
       setComments(data.comments || [])
@@ -45,7 +45,7 @@ export default function CommentSection({ threadId, title = 'Comments' }) {
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch(apiUrl(`/api/comments/${encodeURIComponent(threadId)}`), {
+      const res = await apiFetch(`/api/comments/${encodeURIComponent(threadId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ authorName, body }),

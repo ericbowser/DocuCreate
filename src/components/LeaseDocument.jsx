@@ -61,6 +61,7 @@ export default function LeaseDocument({ data }) {
     monthlyRent, securityDeposit, rentDueDay, lateFee, returnDays, state,
     utilitiesText, petPolicy, petDeposit, houseRules,
     tenantPrintedName, tenantSignedAt,
+    landlordPrintedName, landlordSignedAt,
   } = c
   const vacateClause = clauses.find((cl) => cl.title === 'Notice to Vacate')
   const stateData = data.stateData
@@ -259,16 +260,26 @@ export default function LeaseDocument({ data }) {
             </View>
           </View>
 
-          {tenantPrintedName && tenantSignedAt && (
+          {(landlordPrintedName && landlordSignedAt) || (tenantPrintedName && tenantSignedAt) ? (
             <View style={S.eSigBox}>
               <Text style={S.eSigTitle}>Electronic Signature Record</Text>
-              <Text style={S.eSigText}>Signed as: {tenantPrintedName}</Text>
-              <Text style={S.eSigText}>Date & Time: {new Date(tenantSignedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</Text>
+              {landlordPrintedName && landlordSignedAt && (
+                <>
+                  <Text style={S.eSigText}>Landlord signed as: {landlordPrintedName}</Text>
+                  <Text style={S.eSigText}>Date & Time: {new Date(landlordSignedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</Text>
+                </>
+              )}
+              {tenantPrintedName && tenantSignedAt && (
+                <>
+                  <Text style={S.eSigText}>Tenant signed as: {tenantPrintedName}</Text>
+                  <Text style={S.eSigText}>Date & Time: {new Date(tenantSignedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</Text>
+                </>
+              )}
               <Text style={[S.eSigText, { marginTop: 2, fontSize: 8.5 }]}>
-                This electronic signature is legally binding under applicable e-signature law.
+                These electronic signatures are legally binding under applicable e-signature law.
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <Text style={S.footer}>

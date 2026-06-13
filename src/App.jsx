@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext'
+import { ROUTER_FUTURE } from './config/routerFuture'
 import AppLayout from './components/AppLayout'
 import PageLoader from './components/PageLoader'
 import Home from './pages/Home'
@@ -15,7 +16,7 @@ const BlogPost = lazy(() => import('./pages/BlogPost'))
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
+      <BrowserRouter future={ROUTER_FUTURE}>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route element={<AppLayout />}>

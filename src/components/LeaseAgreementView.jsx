@@ -224,14 +224,24 @@ export default function LeaseAgreementView({ data, locked = false }) {
             </div>
           </div>
 
-          {c.tenantPrintedName && c.tenantSignedAt && (
+          {(c.landlordPrintedName && c.landlordSignedAt) || (c.tenantPrintedName && c.tenantSignedAt) ? (
             <div className="doc-esig">
               <p className="doc-esig-title">Electronic Signature Record</p>
-              <p>Signed as: {c.tenantPrintedName}</p>
-              <p>Date &amp; Time: {new Date(c.tenantSignedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</p>
-              <p className="doc-esig-note">This electronic signature is legally binding under applicable e-signature law.</p>
+              {c.landlordPrintedName && c.landlordSignedAt && (
+                <>
+                  <p>Landlord signed as: {c.landlordPrintedName}</p>
+                  <p>Date &amp; Time: {new Date(c.landlordSignedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</p>
+                </>
+              )}
+              {c.tenantPrintedName && c.tenantSignedAt && (
+                <>
+                  <p>Tenant signed as: {c.tenantPrintedName}</p>
+                  <p>Date &amp; Time: {new Date(c.tenantSignedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</p>
+                </>
+              )}
+              <p className="doc-esig-note">These electronic signatures are legally binding under applicable e-signature law.</p>
             </div>
-          )}
+          ) : null}
         </DocSection>
 
         <footer className="doc-page-footer">

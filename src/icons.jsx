@@ -59,6 +59,7 @@ export {
   HiOutlineMoon,
   HiOutlineSun,
   HiFire,
+  HiOutlineHome,
   HiOutlineBanknotes,
   HiOutlineKey,
   HiOutlineCurrencyDollar,

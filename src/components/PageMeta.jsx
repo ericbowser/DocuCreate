@@ -39,8 +39,33 @@ function restoreMeta({ el, created, previous }) {
   else el.removeAttribute('content')
 }
 
+function upsertHttpEquiv(name, content) {
+  let el = document.querySelector(`meta[http-equiv="${name}"]`)
+  const created = !el
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute('http-equiv', name)
+    document.head.appendChild(el)
+  }
+  const previous = el.getAttribute('content')
+  el.setAttribute('content', content)
+  return { el, created, previous }
+}
+
+function restoreHttpEquiv({ el, created, previous }) {
+  if (created) el.remove()
+  else if (previous != null) el.setAttribute('content', previous)
+  else el.removeAttribute('content')
+}
+
 /** Sets document title, meta description, canonical URL, and robots for SEO (SPA). */
-export default function PageMeta({ title, description, canonical, noindex = false }) {
+export default function PageMeta({
+  title,
+  description,
+  canonical,
+  noindex = false,
+  privateSession = false,
+}) {
   useEffect(() => {
     const fullTitle = title ? `${title} | ${APP_NAME}` : APP_NAME
     const prevTitle = document.title
@@ -49,14 +74,18 @@ export default function PageMeta({ title, description, canonical, noindex = fals
     const descMeta = description ? upsertMeta('description', description) : null
     const canonLink = canonical ? upsertLink('canonical', canonical) : null
     const robotsMeta = noindex ? upsertMeta('robots', 'noindex, follow') : null
+    const cacheMeta = privateSession
+      ? upsertHttpEquiv('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      : null
 
     return () => {
       document.title = prevTitle
       if (descMeta) restoreMeta(descMeta)
       if (canonLink) restoreLink(canonLink)
       if (robotsMeta) restoreMeta(robotsMeta)
+      if (cacheMeta) restoreHttpEquiv(cacheMeta)
     }
-  }, [title, description, canonical, noindex])
+  }, [title, description, canonical, noindex, privateSession])
 
   return null
 }

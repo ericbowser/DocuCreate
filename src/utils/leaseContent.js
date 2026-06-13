@@ -23,6 +23,7 @@ export function buildLeaseContent(data) {
     monthlyRent, securityDeposit, rentDueDay, lateFee,
     utilities, petPolicy, petDeposit, houseRules,
     tenantPrintedName, tenantSignedAt,
+    landlordPrintedName, landlordSignedAt,
   } = data
 
   const propDesc     = propertyDescription || roomDescription || ''
@@ -157,5 +158,6 @@ export function buildLeaseContent(data) {
     securityDeposit, returnDays, state, depositParagraph,
     utilitiesText, petPolicy, petDeposit, houseRules,
     tenantPrintedName, tenantSignedAt,
+    landlordPrintedName, landlordSignedAt,
   }
 }

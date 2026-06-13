@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { encryptPayload, decryptPayload } from './crypto.js'
+import { generateAccessToken, hashAccessToken, verifyAccessToken, hashRecoveryPassword, verifyRecoveryPassword, validateRecoveryPin } from './documentAccess.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(__dirname, 'data')
@@ -36,60 +37,56 @@ function persistDocuments() {
 
 loadDocuments()
 
-/** Redact sensitive fields for unpaid preview — never send full data to client */
+const LOCKED = '[locked]'
+
+/** Fully redact PII for unpaid preview — no reconstructible fragments */
 export function buildMaskedPreview(leaseData) {
-  const mask = (s, keep = 2) => {
-    if (!s || typeof s !== 'string') return '••••••••'
-    if (s.length <= keep) return '••••'
-    return s.slice(0, keep) + '•'.repeat(Math.min(12, s.length - keep))
-  }
-
-  const maskEmail = (e) => {
-    if (!e || !e.includes('@')) return '••••@••••.com'
-    const [user, domain] = e.split('@')
-    return `${mask(user, 1)}@${mask(domain, 2)}`
-  }
-
   return {
     docType: leaseData.docType,
     stateName: leaseData.stateName,
     stateData: leaseData.stateData
       ? { name: leaseData.stateData.name, disclosures: leaseData.stateData.disclosures }
       : null,
-    landlordName: mask(leaseData.landlordName, 3),
-    landlordAddress: mask(leaseData.landlordAddress, 8),
-    landlordPhone: '•••-•••-••••',
-    landlordEmail: maskEmail(leaseData.landlordEmail),
-    tenantName: mask(leaseData.tenantName, 3),
-    tenantPhone: '•••-•••-••••',
-    tenantEmail: maskEmail(leaseData.tenantEmail),
-    businessName: leaseData.businessName ? mask(leaseData.businessName, 4) : undefined,
-    propertyAddress: mask(leaseData.propertyAddress, 10),
-    propertyDescription: mask(leaseData.propertyDescription || leaseData.roomDescription, 6),
-    roomDescription: mask(leaseData.roomDescription, 6),
-    sharedAreas: leaseData.sharedAreas ? mask(leaseData.sharedAreas, 4) : undefined,
-    permittedUse: leaseData.permittedUse ? mask(leaseData.permittedUse, 6) : undefined,
-    squareFootage: leaseData.squareFootage ? '••••' : undefined,
+    landlordName: '[Landlord]',
+    landlordAddress: LOCKED,
+    landlordPhone: LOCKED,
+    landlordEmail: LOCKED,
+    tenantName: '[Tenant]',
+    tenantPhone: LOCKED,
+    tenantEmail: LOCKED,
+    businessName: leaseData.businessName ? LOCKED : undefined,
+    propertyAddress: LOCKED,
+    propertyDescription: LOCKED,
+    roomDescription: LOCKED,
+    sharedAreas: leaseData.sharedAreas ? LOCKED : undefined,
+    permittedUse: leaseData.permittedUse ? LOCKED : undefined,
+    squareFootage: leaseData.squareFootage ? LOCKED : undefined,
     furnished: leaseData.furnished,
     leaseType: leaseData.leaseType,
     startDate: leaseData.startDate,
     endDate: leaseData.endDate,
     noticePeriod: leaseData.noticePeriod,
-    monthlyRent: '••••',
-    securityDeposit: '••••',
+    landlordNoticeDays: leaseData.landlordNoticeDays,
+    tenantNoticeDays: leaseData.tenantNoticeDays,
+    monthlyRent: LOCKED,
+    securityDeposit: LOCKED,
     rentDueDay: leaseData.rentDueDay,
-    lateFee: '•••',
-    keyDeposit: leaseData.keyDeposit ? '•••' : undefined,
-    parkingDeposit: leaseData.parkingDeposit ? '•••' : undefined,
+    lateFee: LOCKED,
+    keyDeposit: leaseData.keyDeposit ? LOCKED : undefined,
+    parkingDeposit: leaseData.parkingDeposit ? LOCKED : undefined,
     requireLastMonth: leaseData.requireLastMonth,
     utilities: Array.isArray(leaseData.utilities) ? leaseData.utilities : [],
     petPolicy: leaseData.petPolicy,
-    petDeposit: leaseData.petDeposit ? '•••' : undefined,
-    houseRules: leaseData.houseRules
-      ? leaseData.houseRules.slice(0, 40) + (leaseData.houseRules.length > 40 ? '… [locked]' : '')
-      : undefined,
+    petDeposit: leaseData.petDeposit ? LOCKED : undefined,
+    houseRules: leaseData.houseRules ? LOCKED : undefined,
     _preview: true,
   }
+}
+
+export function verifyDocumentAccess(documentId, accessToken) {
+  const doc = documents.get(documentId)
+  if (!doc) return { ok: false, reason: 'not_found' }
+  return verifyAccessToken(doc.accessTokenHash, accessToken)
 }
 
 export function updateDocument(id, leaseData) {
@@ -103,17 +100,19 @@ export function updateDocument(id, leaseData) {
 
 export function createDocument(leaseData) {
   const id = crypto.randomUUID()
+  const accessToken = generateAccessToken()
   const encrypted = encryptPayload(leaseData)
   documents.set(id, {
     id,
     encrypted,
+    accessTokenHash: hashAccessToken(accessToken),
     paymentStatus: 'pending',
     stripeSessionId: null,
     paidAt: null,
     createdAt: new Date().toISOString(),
   })
   persistDocuments()
-  return id
+  return { id, accessToken }
 }
 
 export function getDocument(id) {
@@ -154,7 +153,35 @@ export function getDocumentMeta(id) {
     paymentStatus: doc.paymentStatus,
     paidAt: doc.paidAt,
     createdAt: doc.createdAt,
+    requiresAccessToken: Boolean(doc.accessTokenHash),
+    hasRecoveryPassword: Boolean(doc.recoveryPassword),
   }
+}
+
+export function setDocumentRecoveryPassword(documentId, password) {
+  const doc = documents.get(documentId)
+  if (!doc) return { error: 'Document not found', status: 404 }
+  const pinError = validateRecoveryPin(password)
+  if (pinError) {
+    return { error: pinError, status: 400 }
+  }
+  doc.recoveryPassword = hashRecoveryPassword(password)
+  documents.set(documentId, doc)
+  persistDocuments()
+  return { ok: true }
+}
+
+/** Landlord recovery: verify password and issue a fresh session access token. */
+export function unlockDocumentWithPassword(documentId, password) {
+  const doc = documents.get(documentId)
+  if (!doc?.recoveryPassword) return { ok: false }
+  if (!verifyRecoveryPassword(password, doc.recoveryPassword)) return { ok: false }
+
+  const accessToken = generateAccessToken()
+  doc.accessTokenHash = hashAccessToken(accessToken)
+  documents.set(documentId, doc)
+  persistDocuments()
+  return { ok: true, accessToken }
 }
 
 export function deleteDocument(id) {

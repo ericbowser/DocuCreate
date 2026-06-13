@@ -8,9 +8,15 @@ import {
   loadWizardDraft,
   saveWizardDraft,
   getEditingDocumentId,
+  saveDocumentAccessToken,
+  rememberRecentDocument,
+  clearSensitiveClientData,
+  WIZARD_IDLE_MS,
   DEFAULT_FORM,
 } from '../utils/wizardStorage'
-import { apiUrl, parseJsonResponse } from '../utils/fetchApi'
+import { apiFetch, parseJsonResponse } from '../utils/fetchApi'
+import { useAccessPolicy } from '../hooks/useAccessPolicy'
+import { validateRecoveryPin } from '../config/recoveryPin'
 import {
   DocTypeIcon,
   IconWell,
@@ -68,6 +74,7 @@ const STEP_FIELDS = [
 const UTILITIES = ['Water', 'Electric', 'Gas', 'Internet', 'Trash', 'Cable', 'Sewer']
 
 export default function LeaseWizard() {
+  const { recoveryPasswordEnabled } = useAccessPolicy()
   const draft = loadWizardDraft()
   const editingDocumentId = draft.documentId ?? getEditingDocumentId()
   const [step, setStep] = useState(draft.step)
@@ -78,7 +85,7 @@ export default function LeaseWizard() {
   })
   const navigate = useNavigate()
 
-  // Persist form + step to localStorage on every change
+  // Persist form + step to sessionStorage on every change (tab-scoped, not shared long-term)
   useEffect(() => {
     const sub = watch((values) => saveWizardDraft(values, step))
     return () => sub.unsubscribe()
@@ -87,6 +94,25 @@ export default function LeaseWizard() {
   useEffect(() => {
     saveWizardDraft(watch(), step)
   }, [step, watch])
+
+  // Clear wizard data after idle period (shared-device safety)
+  useEffect(() => {
+    let timer
+    const resetIdle = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        clearSensitiveClientData()
+        navigate('/', { replace: true })
+      }, WIZARD_IDLE_MS)
+    }
+    resetIdle()
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
+    events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }))
+    return () => {
+      clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, resetIdle))
+    }
+  }, [navigate])
 
   const docTypeId    = watch('docType')
   const docType      = getDocType(docTypeId)
@@ -162,29 +188,44 @@ export default function LeaseWizard() {
   const onSubmit = async (data) => {
     setSubmitting(true)
     setSubmitError(null)
+    const { recoveryPassword, recoveryPasswordConfirm, ...formData } = data
+    if (recoveryPassword || recoveryPasswordConfirm) {
+      const pinError = validateRecoveryPin(recoveryPassword)
+      if (pinError) {
+        setSubmitError(pinError)
+        setSubmitting(false)
+        return
+      }
+      if (recoveryPassword !== recoveryPasswordConfirm) {
+        setSubmitError('PINs do not match.')
+        setSubmitting(false)
+        return
+      }
+    }
     const payload = {
-      ...data,
-      landlordAddress: resolveLandlordAddress(data),
-      propertyAddress: resolvePropertyAddress(data),
+      ...formData,
+      landlordAddress: resolveLandlordAddress(formData),
+      propertyAddress: resolvePropertyAddress(formData),
       stateName: stateData?.name,
       stateData,
       docType: docType,
     }
     try {
       const isUpdate = Boolean(editingDocumentId)
-      let res = await fetch(
-        apiUrl(isUpdate ? `/api/documents/${editingDocumentId}` : '/api/documents/create'),
+      let res = await apiFetch(
+        isUpdate ? `/api/documents/${editingDocumentId}` : '/api/documents/create',
         {
           method:  isUpdate ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ leaseData: payload }),
+          documentId: editingDocumentId ?? undefined,
         },
       )
       let json = await parseJsonResponse(res)
       let recreated = false
 
       if (!res.ok && isUpdate && res.status === 404) {
-        res = await fetch(apiUrl('/api/documents/create'), {
+        res = await apiFetch('/api/documents/create', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ leaseData: payload }),
@@ -198,7 +239,19 @@ export default function LeaseWizard() {
       }
 
       const documentId = json.documentId ?? editingDocumentId
-      saveWizardDraft(data, step, documentId)
+      if (json.accessToken) saveDocumentAccessToken(documentId, json.accessToken)
+      if (recoveryPassword && json.accessToken) {
+        const pwRes = await apiFetch(`/api/documents/${documentId}/recovery-password`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ password: recoveryPassword }),
+          documentId,
+        })
+        const pwJson = await parseJsonResponse(pwRes)
+        if (!pwRes.ok) throw new Error(pwJson.error || 'Could not save PIN')
+      }
+      rememberRecentDocument(documentId, formData.tenantName || formData.landlordName || 'Lease')
+      saveWizardDraft(formData, step, documentId)
       navigate(`/preview/${documentId}`, recreated ? { state: { recreated: true } } : undefined)
     } catch (err) {
       setSubmitError(err.message || 'Could not save document. Is the server running?')
@@ -536,6 +589,34 @@ export default function LeaseWizard() {
                   </div>
                 )}
                 <ReviewSummary watch={watch} stateData={stateData} docType={docType} moveInCosts={moveInCosts} />
+                {recoveryPasswordEnabled && (
+                <div className="border card-border rounded-xl p-4 space-y-3 bg-slate-50/80 dark:bg-white/[0.04]">
+                  <p className="text-sm font-medium text-heading">Landlord recovery PIN (optional)</p>
+                  <p className="text-xs text-muted">
+                    Set a PIN to reopen this lease later from the home page without saving a lease file.
+                    Numbers only is fine (e.g. 4 digits).
+                  </p>
+                  <Field label="Recovery PIN">
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      {...register('recoveryPassword')}
+                      className={inputClass()}
+                      autoComplete="off"
+                      placeholder="At least 4 characters"
+                    />
+                  </Field>
+                  <Field label="Confirm recovery PIN">
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      {...register('recoveryPasswordConfirm')}
+                      className={inputClass()}
+                      autoComplete="off"
+                    />
+                  </Field>
+                </div>
+                )}
                 <LegalNotice />
               </div>
             )}
@@ -592,7 +673,10 @@ function MoveInPreview({ costs }) {
 }
 
 // ── Review Summary ──
+const REVIEW_SENSITIVE = new Set(['Landlord', 'Tenant', 'Business', 'Property', 'Landlord mail', 'Description', 'Permitted Use'])
+
 function ReviewSummary({ watch, stateData, docType, moveInCosts }) {
+  const [revealed, setRevealed] = useState(false)
   const v         = watch()
   const isMonthly = v.leaseType === 'Month-to-Month'
   const { landlordNoticeDays, tenantNoticeDays } = resolveVacateNotice(v)
@@ -605,6 +689,12 @@ function ReviewSummary({ watch, stateData, docType, moveInCosts }) {
     tenantNoticeDays,
     isMonthly,
   })
+
+  const display = (label, value) => {
+    if (revealed || !REVIEW_SENSITIVE.has(label)) return value || '—'
+    if (!value) return '—'
+    return '••••••••'
+  }
 
   const rows = [
     { label: 'Lease Type',    value: docType?.label },
@@ -629,11 +719,23 @@ function ReviewSummary({ watch, stateData, docType, moveInCosts }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted">
+          Personal details are hidden by default on shared screens.
+        </p>
+        <button
+          type="button"
+          onClick={() => setRevealed(r => !r)}
+          className="text-xs font-medium text-accent hover:underline shrink-0"
+        >
+          {revealed ? 'Hide details' : 'Reveal details'}
+        </button>
+      </div>
       <div className="divide-y divide-line dark:divide-line-dark">
         {rows.map(({ label, value }) => (
           <div key={label} className="flex gap-4 py-2">
             <span className="text-sm text-muted w-36 shrink-0">{label}</span>
-            <span className="text-sm font-medium text-heading">{value || '—'}</span>
+            <span className="text-sm font-medium text-heading">{display(label, value)}</span>
           </div>
         ))}
       </div>
