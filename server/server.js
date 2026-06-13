@@ -1,6 +1,6 @@
+import './loadEnv.js'
 import express   from 'express'
 import cors      from 'cors'
-import dotenv    from 'dotenv'
 import crypto    from 'crypto'
 import { createEmailTransporter, getEmailConfig } from './emailTransport.js'
 import { storeLease, getLease, signLease, deleteLeasesByDocumentId } from './leaseStore.js'
@@ -28,7 +28,12 @@ import { getComments, addComment } from './commentStore.js'
 import { getStateLawBundle, listStateLawCodes } from './stateLawService.js'
 import { DEFAULT_API_PORT } from '../src/config/apiPort.js'
 
-dotenv.config()
+const isProduction = process.env.NODE_ENV === 'production'
+
+if (isProduction && !process.env.DOCUMENT_ENCRYPTION_KEY) {
+  console.error('[config] DOCUMENT_ENCRYPTION_KEY is required in production (openssl rand -hex 32)')
+  process.exit(1)
+}
 
 const app  = express()
 const PORT = process.env.API_PORT || DEFAULT_API_PORT
@@ -70,6 +75,9 @@ if (transporter) {
 
 async function sendMail(options) {
   if (emailMode === 'mock') {
+    if (isProduction) {
+      throw new Error('Email is not configured. Set EMAIL_USER and Google OAuth or app password in .env')
+    }
     console.log('[email:mock]', { to: options.to, subject: options.subject })
     return { messageId: `mock-${Date.now()}` }
   }
@@ -377,11 +385,14 @@ app.get('/api/health', (req, res) => {
     ok: true,
     emailMode,
     authMethod,
-    emailUser: EMAIL_USER,
+    emailUser: EMAIL_USER || null,
+    emailConfigured: Boolean(transporter),
     stripeEnabled,
     paymentsEnabled: isPaymentsEnabled(),
     paymentBypassed: isPaymentBypassed(),
     price: getPriceDisplay(),
+    appUrl: APP_URL,
+    encryptionKeySet: Boolean(process.env.DOCUMENT_ENCRYPTION_KEY),
   })
 })
 

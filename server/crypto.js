@@ -1,8 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto'
 
 function getKey() {
-  const secret = process.env.DOCUMENT_ENCRYPTION_KEY || 'docucreate-dev-key-change-in-production'
-  return scryptSync(secret, 'docucreate-salt-v1', 32)
+  const secret = process.env.DOCUMENT_ENCRYPTION_KEY
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('DOCUMENT_ENCRYPTION_KEY is required in production (openssl rand -hex 32)')
+  }
+  return scryptSync(secret || 'docucreate-dev-key-change-in-production', 'docucreate-salt-v1', 32)
 }
 
 export function encryptPayload(data) {
