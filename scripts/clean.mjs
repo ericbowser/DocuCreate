@@ -11,7 +11,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const targets = [
   'dist',
   '.vite',
-  'src/output.css',
+  'src/styles/output.css',
   'coverage',
   'server/data',
   'node_modules/.cache',

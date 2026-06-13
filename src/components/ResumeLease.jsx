@@ -61,9 +61,22 @@ export default function ResumeLease() {
     try {
       const parsed = await readResumeFile(file)
       if (parsed.error) throw new Error(parsed.error)
+
+      const res = await apiFetch(`/api/documents/${parsed.documentId}`)
+      const data = await parseJsonResponse(res)
+
+      if (!res.ok) {
+        if (res.status === 403 && parsed.legacyNoToken) {
+          throw new Error(
+            'This lease file has no access key in it. On the home page, enter the document ID and your recovery PIN, or open preview in the browser where you created the lease and download the lease file again.',
+          )
+        }
+        throw new Error(data.error || 'Could not open lease')
+      }
+
       if (parsed.accessToken) {
         openDocumentSession(parsed.documentId, parsed.accessToken, parsed.label)
-      } else if (parsed.documentId) {
+      } else {
         rememberRecentDocument(parsed.documentId, parsed.label || 'Lease')
       }
       goToPreview(parsed.documentId)

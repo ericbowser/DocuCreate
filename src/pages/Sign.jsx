@@ -179,6 +179,32 @@ export default function Sign() {
           )}
         </div>
 
+        {!isLandlord && lease.landlordSignedAt && (
+          <div className="card-surface p-6 space-y-3">
+            <h2 className="text-base font-semibold text-heading">Landlord signature</h2>
+            <p className="text-sm text-muted">
+              {lease.landlordPrintedName || d.landlordName} signed on{' '}
+              {new Date(lease.landlordSignedAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+              .
+            </p>
+            {lease.landlordSignatureData ? (
+              <div className="border card-border rounded-lg p-3 bg-white dark:bg-surface-input">
+                <img
+                  src={lease.landlordSignatureData}
+                  alt={`Signature of ${lease.landlordPrintedName || d.landlordName}`}
+                  className="max-h-24 w-auto"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-body font-medium">{lease.landlordPrintedName || d.landlordName}</p>
+            )}
+          </div>
+        )}
+
         {/* Legal Acknowledgement */}
         <div className="warn-panel text-sm">
           By signing below you confirm you have read and agree to all terms of this Room Rental Lease Agreement,

@@ -53,6 +53,7 @@ export default function Preview() {
   const [recoverySaving, setRecoverySaving] = useState(false)
   const [recoveryError, setRecoveryError] = useState(null)
   const [recoverySaved, setRecoverySaved] = useState(false)
+  const [downloadError, setDownloadError] = useState(null)
 
   const fetchDocument = useCallback(async () => {
     if (!documentId) {
@@ -69,7 +70,7 @@ export default function Preview() {
           throw new Error(
             documentIdOnlyAccess
               ? 'Could not open this lease. Check the document ID and try again.'
-              : 'This preview link is missing its access key. Use “Resume a lease” on the home page with your document ID and PIN, or open your lease file.',
+              : 'This preview link is missing its access key. Use “Resume a lease” on the home page with your document ID and PIN, or download a new lease file while preview is open in this browser.',
           )
         }
         throw new Error(data.error || 'Document not found')
@@ -224,7 +225,14 @@ export default function Preview() {
 
   const handleDownloadResume = () => {
     if (!documentId) return
+    setDownloadError(null)
     const accessToken = getDocumentAccessToken(documentId)
+    if (!accessToken && !documentIdOnlyAccess) {
+      setDownloadError(
+        'No access key in this browser session. Set a recovery PIN below, or use “Resume a lease” with your document ID and PIN.',
+      )
+      return
+    }
     downloadResumeBundle(
       buildResumeBundle({
         documentId,
@@ -620,6 +628,9 @@ export default function Preview() {
                 Download lease file
               </button>
             </div>
+            {downloadError && (
+              <p className="text-red-600 dark:text-red-400 text-xs">{downloadError}</p>
+            )}
             {!hasRecoveryPassword && recoveryPasswordEnabled ? (
               <form onSubmit={handleSetRecoveryPassword} className="space-y-2 pt-2 border-t border-line dark:border-line-dark">
                 <p className="text-muted">Set a recovery PIN to reopen this lease on another device.</p>

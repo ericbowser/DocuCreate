@@ -12,8 +12,8 @@ dist/
 .vite/
 *.tsbuildinfo
 
-# Tailwind watch artifact (app imports src/index.css)
-src/output.css
+# Tailwind watch artifact (optional; Vite builds from src/styles/index.css)
+src/styles/output.css
 
 # ── Runtime / user-generated server data ──────────────────────
 # Encrypted leases, blog comments, and any future JSON stores
