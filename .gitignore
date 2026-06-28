@@ -46,3 +46,6 @@ coverage/
 *.pem
 *.key
 credentials.json
+
+cypress/screenshots/
+cypress/videos/

@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import PageMeta from '../components/PageMeta'
-
-const API = import.meta.env.VITE_API_URL || ''
+import { API } from '../utils/api'
 
 async function fetchMyDocuments() {
   const res = await fetch(`${API}/api/my-documents`, { credentials: 'include' })

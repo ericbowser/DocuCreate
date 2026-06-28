@@ -783,6 +783,21 @@ app.get('/api/health', (req, res) => {
   })
 })
 
+// Auto-migrate: add columns that may be missing from older DB installs
+async function runMigrations() {
+  try {
+    await pool.query(`
+      ALTER TABLE docucreate.documents
+        ADD COLUMN IF NOT EXISTS paid        BOOLEAN   NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    `)
+    console.log('[db] migrations ok')
+  } catch (err) {
+    console.warn('[db] migration warning:', err.message)
+  }
+}
+runMigrations()
+
 app.listen(PORT, () => {
   const accessMode = isDocumentIdOnlyAccess() ? 'document-id only (dev)' : 'access token required'
   console.log(`[docucreate:server] running on port ${PORT} | email: ${emailMode} | payments: ${isPaymentsEnabled() ? 'on' : 'off (free unlock)'} | access: ${accessMode}`)

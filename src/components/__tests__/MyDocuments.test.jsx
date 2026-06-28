@@ -23,15 +23,26 @@ const mockDocuments = [
   },
 ]
 
+function mockFetch(documents = mockDocuments) {
+  global.fetch = jest.fn((url) => {
+    const path = String(url)
+    if (path.includes('/api/auth/me')) {
+      return Promise.resolve({
+        json: () => Promise.resolve({ user: { id: '1', email: 'test@example.com' } }),
+      })
+    }
+    if (path.includes('/api/my-documents')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ documents }),
+      })
+    }
+    return Promise.reject(new Error(`Unexpected fetch: ${url}`))
+  })
+}
+
 beforeEach(() => {
-  global.fetch = jest.fn()
-    // Auth hydration
-    .mockResolvedValueOnce({ json: () => Promise.resolve({ user: { id: '1', email: 'test@example.com' } }) })
-    // My documents fetch
-    .mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ documents: mockDocuments }),
-    })
+  mockFetch()
 })
 
 afterEach(() => jest.restoreAllMocks())
@@ -62,9 +73,7 @@ describe('MyDocuments page', () => {
   })
 
   it('shows empty state when no documents', async () => {
-    global.fetch = jest.fn()
-      .mockResolvedValueOnce({ json: () => Promise.resolve({ user: { id: '1', email: 'test@example.com' } }) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ documents: [] }) })
+    mockFetch([])
 
     renderWithProviders(<MyDocuments />)
     expect(await screen.findByText(/no documents yet/i)).toBeInTheDocument()
