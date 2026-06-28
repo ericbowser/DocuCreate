@@ -3,7 +3,7 @@ import { APP_NAME } from './brand.js'
 
 const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
-const PRICE_CENTS = parseInt(process.env.LEASE_PRICE_CENTS || '1999', 10)
+const PRICE_CENTS = parseInt(process.env.LEASE_PRICE_CENTS || '699', 10)
 const CURRENCY = process.env.STRIPE_CURRENCY || 'usd'
 
 export const stripeEnabled = Boolean(STRIPE_SECRET)

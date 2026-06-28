@@ -1,5 +1,4 @@
 import LeaseWizard from '../components/LeaseWizard'
-import ResumeLease from '../components/ResumeLease'
 import { LegalNotice } from '../components/LegalNotice'
 
 export default function Home() {
@@ -10,7 +9,6 @@ export default function Home() {
           Room rentals · Apartments · Houses · Condos · Commercial — built in minutes.
         </p>
         <LegalNotice className="mb-6" />
-        <ResumeLease />
         <LeaseWizard />
       </div>
     </div>

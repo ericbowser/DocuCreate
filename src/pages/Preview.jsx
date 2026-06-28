@@ -18,6 +18,10 @@ import {
   HiCheck,
 } from '../icons'
 
+// ── Feature flag ─────────────────────────────────────────────
+// Set to true when ready to charge. All payment logic is preserved below.
+const PAYMENTS_UI_ENABLED = false
+
 export default function Preview() {
   const { documentIdOnlyAccess, recoveryPasswordEnabled } = useAccessPolicy()
   const { documentId }  = useParams()
@@ -269,7 +273,7 @@ export default function Preview() {
   }
 
   const handleSend = async () => {
-    if (!paid) return
+    if (PAYMENTS_UI_ENABLED && !paid) return
     setSending(true)
     setSendError(null)
     setResendNote(null)
@@ -301,7 +305,7 @@ export default function Preview() {
   }
 
   const handleResend = async (party = 'all') => {
-    if (!paid) return
+    if (PAYMENTS_UI_ENABLED && !paid) return
     setResending(party)
     setSendError(null)
     setResendNote(null)
@@ -371,6 +375,8 @@ export default function Preview() {
   const paymentCancelled = searchParams.get('payment') === 'cancelled'
   const signingActive = sent && signing && !signing.fullyExecuted
   const signingComplete = signing?.fullyExecuted
+  // When payment UI is hidden, treat every doc as unlocked for rendering purposes
+  const effectivePaid = PAYMENTS_UI_ENABLED ? paid : true
 
   return (
     <div className="page-shell preview-page">
@@ -382,13 +388,7 @@ export default function Preview() {
             <div>
               <h1 className="text-2xl font-bold text-heading">Lease Preview</h1>
               <p className="text-muted text-sm mt-0.5">
-                {paid ? (
-                  <>{leaseData.tenantName} · {leaseData.propertyAddress}</>
-                ) : paymentBypassed ? (
-                  <>Full document — free during launch</>
-                ) : (
-                  <>Preview only — pay to unlock download &amp; print</>
-                )}
+                {leaseData.tenantName} · {leaseData.propertyAddress}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -441,7 +441,7 @@ export default function Preview() {
                 </div>
               )}
 
-              {paid ? (
+              {effectivePaid ? (
                 <>
                   <PDFDownloadLink
                     document={<LeaseDocument data={leaseData} />}
@@ -489,16 +489,7 @@ export default function Preview() {
                     </button>
                   )}
                 </>
-              ) : !paymentBypassed && (
-                <button onClick={handlePay} disabled={paying}
-                  className="px-5 py-2 bg-ember-600 hover:bg-ember-700 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors">
-                  {paying ? 'Redirecting…' : (
-                    <span className="inline-flex items-center gap-1.5">
-                      <HiLockClosed className="w-4 h-4" aria-hidden="true" /> Pay {price ?? ''} to Unlock
-                    </span>
-                  )}
-                </button>
-              )}
+              ) : null}
             </div>
           </div>
         </header>
@@ -508,7 +499,7 @@ export default function Preview() {
             Your previous document was no longer on the server, so a new copy was saved. Payment status was not transferred — unlock again if needed.
           </div>
         )}
-        {paymentCancelled && !paid && (
+        {PAYMENTS_UI_ENABLED && paymentCancelled && !paid && (
           <div className="alert-error no-print mb-4">Payment was cancelled. Your preview is still saved.</div>
         )}
         {editError && <div className="alert-error no-print mb-4">{editError}</div>}
@@ -518,7 +509,7 @@ export default function Preview() {
             This lease was sent for e-signature. Deleting removes the stored document; any signing links already emailed may no longer match an active record.
           </div>
         )}
-        {payError && <div className="alert-error no-print mb-4">{payError}</div>}
+        {PAYMENTS_UI_ENABLED && payError && <div className="alert-error no-print mb-4">{payError}</div>}
         {sendError && <div className="alert-error no-print mb-4">{sendError}</div>}
         {resendNote && <div className="alert-success no-print mb-4">{resendNote}</div>}
         {signingActive && (
@@ -611,11 +602,6 @@ export default function Preview() {
           </div>
         )}
 
-        {paymentBypassed && (
-          <div className="info-panel no-print mb-5 text-sm">
-            Downloads, printing, and e-signature are free while payments are not enabled. No Stripe account required.
-          </div>
-        )}
         {!loadError && leaseData && (
           <div className="info-panel no-print mb-5 text-sm space-y-3">
             <p className="font-medium text-heading">Landlord access</p>
@@ -668,7 +654,7 @@ export default function Preview() {
             ) : null}
           </div>
         )}
-        {!paid && !paymentBypassed && (
+        {PAYMENTS_UI_ENABLED && !paid && !paymentBypassed && (
           <div className="payment-banner no-print mb-5">
             <p className="text-sm text-white font-medium">
               Your lease is ready. Pay {price} once to unlock the full document, PDF download, printing, and e-signature.
@@ -676,7 +662,7 @@ export default function Preview() {
           </div>
         )}
 
-        <LeaseAgreementView data={leaseData} locked={!paid} />
+        <LeaseAgreementView data={leaseData} locked={PAYMENTS_UI_ENABLED && !effectivePaid} />
       </div>
     </div>
   )

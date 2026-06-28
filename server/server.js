@@ -1,6 +1,10 @@
 import './loadEnv.js'
-import express   from 'express'
-import cors      from 'cors'
+import express        from 'express'
+import cors           from 'cors'
+import session        from 'express-session'
+import connectPgSimple from 'connect-pg-simple'
+import { pool }       from './db.js'
+import authRouter     from './auth.js'
 import { createEmailTransporter, getEmailConfig } from './emailTransport.js'
 import {
   createSigningGroup,
@@ -52,7 +56,30 @@ const app  = express()
 const PORT = process.env.API_PORT || DEFAULT_API_PORT
 const APP_URL = process.env.APP_URL || 'http://localhost:5173'
 
-app.use(cors())
+app.use(cors({
+  origin: APP_URL,
+  credentials: true,
+}))
+
+// ── Sessions (stored in docucreate.sessions) ──────────────────
+const PgSession = connectPgSimple(session)
+app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: 'sessions',
+    schemaName: 'docucreate',
+    createTableIfMissing: false,
+  }),
+  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'strict' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  },
+}))
 
 const SENSITIVE_API = /^\/api\/(documents|lease)(\/|$)/
 
@@ -82,6 +109,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 })
 
 app.use(express.json({ limit: '5mb' }))
+
+// ── Auth routes ───────────────────────────────────────────────
+app.use('/api/auth', authRouter)
 
 const emailConfig = getEmailConfig()
 const { EMAIL_USER } = emailConfig
@@ -145,12 +175,25 @@ app.use('/api/lease/resend', documentRateLimit)
 // POST /api/documents/create
 // Store encrypted lease server-side; client only gets document ID
 // ─────────────────────────────────────────────────────────────
-app.post('/api/documents/create', (req, res) => {
+app.post('/api/documents/create', async (req, res) => {
   const { leaseData } = req.body
   if (!leaseData?.tenantName || !leaseData?.landlordName) {
     return res.status(400).json({ error: 'Incomplete lease data' })
   }
   const { id: documentId, accessToken } = createDocument(leaseData)
+
+  // Record in Postgres if user is logged in
+  if (req.session?.userId) {
+    const title = [leaseData.propertyAddress, leaseData.tenantName]
+      .filter(Boolean).join(' — ')
+    pool.query(
+      `INSERT INTO docucreate.documents (user_id, document_id, title, lease_type, status)
+       VALUES ($1, $2, $3, $4, 'draft')
+       ON CONFLICT (document_id) DO NOTHING`,
+      [req.session.userId, documentId, title || null, leaseData.leaseType || null]
+    ).catch(err => console.error('[documents] failed to record in db', err.message))
+  }
+
   res.json({
     documentId,
     accessToken,
@@ -695,6 +738,28 @@ app.get('/api/state-laws/:code', (req, res) => {
   const bundle = getStateLawBundle(req.params.code.toUpperCase())
   if (!bundle) return res.status(404).json({ error: 'Unknown state code' })
   res.json(bundle)
+})
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/my-documents — list documents for the logged-in user
+// ─────────────────────────────────────────────────────────────
+app.get('/api/my-documents', async (req, res) => {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: 'Not authenticated' })
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT document_id, title, lease_type, status, paid, created_at, updated_at
+       FROM docucreate.documents
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [req.session.userId]
+    )
+    res.json({ documents: rows })
+  } catch (err) {
+    console.error('[my-documents]', err.message)
+    res.status(500).json({ error: 'Could not load documents' })
+  }
 })
 
 // ─────────────────────────────────────────────────────────────

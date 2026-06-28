@@ -4,19 +4,19 @@ import ThemeToggle from '../ThemeToggle'
 import { renderWithProviders } from '../../test/test-utils'
 
 describe('ThemeToggle', () => {
-  it('starts in light mode by default', () => {
+  it('starts in dark mode by default', () => {
     renderWithProviders(<ThemeToggle />)
-    expect(screen.getByRole('button', { name: /ember night mode/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /light mode/i })).toBeInTheDocument()
   })
 
-  it('toggles dark mode on click', async () => {
+  it('toggles to light mode on click', async () => {
     const user = userEvent.setup()
     renderWithProviders(<ThemeToggle />)
 
-    await user.click(screen.getByRole('button', { name: /ember night mode/i }))
-    expect(screen.getByRole('button', { name: /light mode/i })).toBeInTheDocument()
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-    expect(localStorage.getItem('theme')).toBe('dark')
+    await user.click(screen.getByRole('button', { name: /light mode/i }))
+    expect(screen.getByRole('button', { name: /ember night mode/i })).toBeInTheDocument()
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(localStorage.getItem('theme')).toBe('light')
   })
 
   it('restores stored theme preference', () => {
