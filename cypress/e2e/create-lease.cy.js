@@ -36,6 +36,8 @@ describe('Create a Room Rental Lease', () => {
   beforeEach(() => {
     cy.clearCookies()
     cy.clearLocalStorage()
+    cy.intercept('POST', '**/api/documents/create').as('createDoc')
+    cy.intercept('GET', '**/api/my-documents').as('myDocs')
     // Verify the API is up — gives a clear error if the server isn't running
     cy.request({ url: 'http://localhost:24334/api/health', failOnStatusCode: false })
       .its('status').should('eq', 200)
@@ -181,21 +183,23 @@ describe('Create a Room Rental Lease', () => {
     // ── Step 11: Review & Submit ───────────────────────────────
     cy.contains('Review your lease').should('be.visible')
     cy.wait(800)
+
     cy.contains('button', 'Generate Lease').click()
 
     // ── Preview page ───────────────────────────────────────────
+    cy.wait('@createDoc').its('response.statusCode').should('eq', 200)
     cy.url().should('include', '/preview/', { timeout: 15000 })
-    cy.wait(800)
-    cy.contains('Lease Preview').should('be.visible')
-    cy.contains('Jane Smith').should('be.visible')
+    cy.contains('Lease Preview', { timeout: 15000 }).should('be.visible')
+    cy.contains('Jane Smith', { timeout: 15000 }).should('be.visible')
     cy.contains('200 Elm Street').should('be.visible')
     cy.contains('Download PDF').should('be.visible')
     cy.contains('Send for E-Signature').should('be.visible')
 
     // ── My Documents ───────────────────────────────────────────
-    cy.wait(600)
     cy.contains('My Docs').click()
     cy.url().should('include', '/my-documents')
-    cy.contains('Jane Smith').should('be.visible')
+    cy.wait('@myDocs', { timeout: 15000 }).its('response.statusCode').should('eq', 200)
+    cy.contains('Could not load documents').should('not.exist')
+    cy.contains('Jane Smith', { timeout: 15000 }).should('be.visible')
   })
 })

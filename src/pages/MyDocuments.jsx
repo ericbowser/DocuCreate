@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import PageMeta from '../components/PageMeta'
-import { API } from '../utils/api'
+import { apiFetch, parseJsonResponse } from '../utils/fetchApi'
 
 async function fetchMyDocuments() {
-  const res = await fetch(`${API}/api/my-documents`, { credentials: 'include' })
-  if (!res.ok) throw new Error('Failed to load documents')
-  return res.json()
+  const res = await apiFetch('/api/my-documents', { credentials: 'include' })
+  const data = await parseJsonResponse(res)
+  if (!res.ok) throw new Error(data.error || 'Failed to load documents')
+  return data
 }
 
 function statusBadge(status) {
@@ -26,6 +27,7 @@ export default function MyDocuments() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['my-documents'],
     queryFn: fetchMyDocuments,
+    refetchOnMount: 'always',
   })
 
   const documents = data?.documents ?? []

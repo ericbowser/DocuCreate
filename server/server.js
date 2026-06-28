@@ -1,4 +1,7 @@
 import './loadEnv.js'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import express        from 'express'
 import cors           from 'cors'
 import session        from 'express-session'
@@ -31,6 +34,7 @@ import {
 } from './documentStore.js'
 import { documentRateLimit, unlockRateLimit } from './rateLimit.js'
 import { isDocumentIdOnlyAccess, isRecoveryPasswordEnabled } from './documentAccessPolicy.js'
+import { recordUserDocument, userOwnsDocument } from './documentOwnership.js'
 import { APP_NAME } from './brand.js'
 import {
   stripeEnabled,
@@ -150,13 +154,16 @@ function denyDocumentAccess(res, result) {
   return res.status(403).json({ error: 'Access denied', code })
 }
 
-function assertDocumentAccess(req, res, documentId) {
+async function assertDocumentAccess(req, res, documentId) {
   if (!documentId) return null
   if (isDocumentIdOnlyAccess()) {
     if (!getDocumentMeta(documentId)) {
       denyDocumentAccess(res, { reason: 'not_found' })
       return false
     }
+    return true
+  }
+  if (req.session?.userId && await userOwnsDocument(req.session.userId, documentId)) {
     return true
   }
   const result = verifyDocumentAccess(documentId, getDocumentAccessToken(req))
@@ -182,16 +189,12 @@ app.post('/api/documents/create', async (req, res) => {
   }
   const { id: documentId, accessToken } = createDocument(leaseData)
 
-  // Record in Postgres if user is logged in
   if (req.session?.userId) {
-    const title = [leaseData.propertyAddress, leaseData.tenantName]
-      .filter(Boolean).join(' — ')
-    pool.query(
-      `INSERT INTO docucreate.documents (user_id, document_id, title, lease_type, status)
-       VALUES ($1, $2, $3, $4, 'draft')
-       ON CONFLICT (document_id) DO NOTHING`,
-      [req.session.userId, documentId, title || null, leaseData.leaseType || null]
-    ).catch(err => console.error('[documents] failed to record in db', err.message))
+    try {
+      await recordUserDocument(req.session.userId, documentId, leaseData)
+    } catch (err) {
+      console.error('[documents] failed to record in db', err.message)
+    }
   }
 
   res.json({
@@ -226,11 +229,11 @@ app.post('/api/documents/unlock', unlockRateLimit, (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // POST /api/documents/:id/recovery-password — set landlord recovery password
 // ─────────────────────────────────────────────────────────────
-app.post('/api/documents/:id/recovery-password', (req, res) => {
+app.post('/api/documents/:id/recovery-password', async (req, res) => {
   if (!isRecoveryPasswordEnabled()) {
     return res.status(503).json({ error: 'Recovery PIN is disabled while DOCUMENT_ID_ACCESS is enabled.' })
   }
-  if (!assertDocumentAccess(req, res, req.params.id)) return
+  if (!await assertDocumentAccess(req, res, req.params.id)) return
 
   const { password } = req.body
   const result = setDocumentRecoveryPassword(req.params.id, password)
@@ -243,8 +246,8 @@ app.post('/api/documents/:id/recovery-password', (req, res) => {
 // GET /api/documents/:id/edit
 // Full lease data for wizard pre-fill (document ID is the access token)
 // ─────────────────────────────────────────────────────────────
-app.get('/api/documents/:id/edit', (req, res) => {
-  if (!assertDocumentAccess(req, res, req.params.id)) return
+app.get('/api/documents/:id/edit', async (req, res) => {
+  if (!await assertDocumentAccess(req, res, req.params.id)) return
 
   const meta = getDocumentMeta(req.params.id)
   if (!meta) return res.status(404).json({ error: 'Document not found' })
@@ -258,8 +261,8 @@ app.get('/api/documents/:id/edit', (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/documents/:id — update stored lease after wizard edit
 // ─────────────────────────────────────────────────────────────
-app.patch('/api/documents/:id', (req, res) => {
-  if (!assertDocumentAccess(req, res, req.params.id)) return
+app.patch('/api/documents/:id', async (req, res) => {
+  if (!await assertDocumentAccess(req, res, req.params.id)) return
 
   const { leaseData } = req.body
   if (!leaseData?.tenantName || !leaseData?.landlordName) {
@@ -274,8 +277,8 @@ app.patch('/api/documents/:id', (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // DELETE /api/documents/:id — remove stored lease (document ID is the access token)
 // ─────────────────────────────────────────────────────────────
-app.delete('/api/documents/:id', (req, res) => {
-  if (!assertDocumentAccess(req, res, req.params.id)) return
+app.delete('/api/documents/:id', async (req, res) => {
+  if (!await assertDocumentAccess(req, res, req.params.id)) return
 
   const meta = getDocumentMeta(req.params.id)
   if (!meta) return res.status(404).json({ error: 'Document not found' })
@@ -289,8 +292,8 @@ app.delete('/api/documents/:id', (req, res) => {
 // GET /api/documents/:id
 // Unpaid → masked preview only. Paid → full lease data.
 // ─────────────────────────────────────────────────────────────
-app.get('/api/documents/:id', (req, res) => {
-  if (!assertDocumentAccess(req, res, req.params.id)) return
+app.get('/api/documents/:id', async (req, res) => {
+  if (!await assertDocumentAccess(req, res, req.params.id)) return
 
   const meta = getDocumentMeta(req.params.id)
   if (!meta) return res.status(404).json({ error: 'Document not found' })
@@ -314,7 +317,7 @@ app.get('/api/documents/:id', (req, res) => {
 // Called after Stripe redirect with session_id
 // ─────────────────────────────────────────────────────────────
 app.post('/api/documents/:id/verify-payment', async (req, res) => {
-  if (!assertDocumentAccess(req, res, req.params.id)) return
+  if (!await assertDocumentAccess(req, res, req.params.id)) return
 
   const { sessionId } = req.body
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
@@ -338,7 +341,7 @@ app.post('/api/documents/:id/verify-payment', async (req, res) => {
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   const { documentId } = req.body
   if (!documentId) return res.status(400).json({ error: 'documentId required' })
-  if (!assertDocumentAccess(req, res, documentId)) return
+  if (!await assertDocumentAccess(req, res, documentId)) return
 
   const meta = getDocumentMeta(documentId)
   if (!meta) return res.status(404).json({ error: 'Document not found' })
@@ -449,7 +452,7 @@ app.post('/api/lease/send', async (req, res) => {
 
   let data = leaseData
   if (documentId) {
-    if (!assertDocumentAccess(req, res, documentId)) return
+    if (!await assertDocumentAccess(req, res, documentId)) return
     if (!isDocumentPaid(documentId) && !isPaymentBypassed()) {
       return res.status(402).json({ error: 'Payment required before sending for signature' })
     }
@@ -494,7 +497,7 @@ app.post('/api/lease/resend', async (req, res) => {
   if (!documentId) {
     return res.status(400).json({ error: 'documentId is required' })
   }
-  if (!assertDocumentAccess(req, res, documentId)) return
+  if (!await assertDocumentAccess(req, res, documentId)) return
   if (!['all', 'tenant', 'landlord'].includes(party)) {
     return res.status(400).json({ error: 'party must be all, tenant, or landlord' })
   }
@@ -783,7 +786,19 @@ app.get('/api/health', (req, res) => {
   })
 })
 
-// Auto-migrate: add columns that may be missing from older DB installs
+// Ensure Postgres schema exists (idempotent — safe on every boot)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+async function ensureSchema() {
+  try {
+    const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8')
+    await pool.query(sql)
+    console.log('[db] schema ok')
+  } catch (err) {
+    console.error('[db] schema failed:', err.message)
+  }
+}
+
+// Patch columns that may be missing from older installs
 async function runMigrations() {
   try {
     await pool.query(`
@@ -796,7 +811,9 @@ async function runMigrations() {
     console.warn('[db] migration warning:', err.message)
   }
 }
-runMigrations()
+
+await ensureSchema()
+await runMigrations()
 
 app.listen(PORT, () => {
   const accessMode = isDocumentIdOnlyAccess() ? 'document-id only (dev)' : 'access token required'
