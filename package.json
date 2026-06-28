@@ -19,7 +19,9 @@
     "tail:watch": "tailwindcss -i ./src/styles/index.css -o ./src/styles/output.css --watch",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
-    "cy:lease": "cypress run --spec cypress/e2e/create-lease.cy.js"
+    "cy:lease": "cypress run --spec cypress/e2e/create-lease.cy.js",
+    "cy:lease:headed": "cypress run --spec cypress/e2e/create-lease.cy.js --headed --browser chrome",
+    "cy:e2e": "start-server-and-test dev http://localhost:24333 cy:lease"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.0",
@@ -31,7 +33,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "express-session": "^1.18.1",
-    "nodemailer": "^8.0.11",
+    "nodemailer": "^9.0.1",
     "pg": "^8.11.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -49,13 +51,14 @@
     "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.18",
-    "babel-jest": "^29.7.0",
+    "babel-jest": "^30.4.1",
     "concurrently": "^8.2.2",
     "cypress": "^15.18.0",
     "identity-obj-proxy": "^3.0.0",
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
     "postcss": "^8.4.35",
+    "start-server-and-test": "^3.0.11",
     "tailwindcss": "^3.4.1",
     "vite": "^8.0.16"
   },
@@ -64,5 +67,8 @@
     "url": "git+https://github.com/ericbowser/DocuCreate.git"
   },
   "author": "E.R.B.",
-  "license": "ISC"
+  "license": "ISC",
+  "overrides": {
+    "js-yaml": "^4.2.0"
+  }
 }
