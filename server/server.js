@@ -34,7 +34,7 @@ import {
 } from './documentStore.js'
 import { documentRateLimit, unlockRateLimit } from './rateLimit.js'
 import { isDocumentIdOnlyAccess, isRecoveryPasswordEnabled } from './documentAccessPolicy.js'
-import { recordUserDocument, userOwnsDocument } from './documentOwnership.js'
+import { recordUserDocument, userOwnsDocument, updateDocumentRecord } from './documentOwnership.js'
 import { APP_NAME } from './brand.js'
 import {
   stripeEnabled,
@@ -46,6 +46,7 @@ import {
   getPriceDisplay,
 } from './stripe.js'
 import { getComments, addComment } from './commentStore.js'
+import { recordScreeningClick } from './screeningEventStore.js'
 import { getStateLawBundle, listStateLawCodes } from './stateLawService.js'
 import { DEFAULT_API_PORT } from '../src/config/apiPort.js'
 
@@ -103,6 +104,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     const result = await handleWebhook(req.body, sig)
     if (result.documentId) {
       markDocumentPaid(result.documentId, { stripeSessionId: result.stripeSessionId })
+      updateDocumentRecord(result.documentId, { paid: true }).catch(err =>
+        console.error('[stripe] failed to sync paid to db', err.message)
+      )
       console.log(`[stripe] Document ${result.documentId} marked paid`)
     }
     res.json({ received: true })
@@ -271,6 +275,14 @@ app.patch('/api/documents/:id', async (req, res) => {
   if (!updateDocument(req.params.id, leaseData)) {
     return res.status(404).json({ error: 'Document not found' })
   }
+
+  // Keep DB record title + lease_type in sync with edited content
+  if (req.session?.userId) {
+    recordUserDocument(req.session.userId, req.params.id, leaseData).catch(err =>
+      console.error('[documents/patch] failed to sync to db', err.message)
+    )
+  }
+
   res.json({ documentId: req.params.id })
 })
 
@@ -324,6 +336,9 @@ app.post('/api/documents/:id/verify-payment', async (req, res) => {
 
   if (isPaymentBypassed()) {
     markDocumentPaid(req.params.id, {})
+    updateDocumentRecord(req.params.id, { paid: true }).catch(err =>
+      console.error('[verify-payment] failed to sync paid to db', err.message)
+    )
     return res.json({ paid: true, bypassed: true })
   }
 
@@ -331,6 +346,9 @@ app.post('/api/documents/:id/verify-payment', async (req, res) => {
   if (!result.paid) return res.status(402).json({ error: result.error })
 
   markDocumentPaid(req.params.id, { stripeSessionId: sessionId })
+  updateDocumentRecord(req.params.id, { paid: true }).catch(err =>
+    console.error('[verify-payment] failed to sync paid to db', err.message)
+  )
   const leaseData = getDecryptedLease(req.params.id)
   res.json({ paid: true, leaseData })
 })
@@ -481,6 +499,11 @@ app.post('/api/lease/send', async (req, res) => {
   try {
     await sendTenantSigningInvite(data, tenantUrl)
     await sendLandlordSigningInvite(data, landlordUrl)
+    if (documentId) {
+      updateDocumentRecord(documentId, { status: 'sent' }).catch(err =>
+        console.error('[lease/send] failed to sync status to db', err.message)
+      )
+    }
     res.json({ success: true, tenantToken, landlordToken })
   } catch (err) {
     console.error('[/api/lease/send]', err.message)
@@ -708,6 +731,11 @@ app.post('/api/lease/:token/sign', async (req, res) => {
       })
     }
 
+    if (executed && lease.documentId) {
+      updateDocumentRecord(lease.documentId, { status: 'executed' }).catch(err =>
+        console.error('[lease/sign] failed to sync executed status to db', err.message)
+      )
+    }
     res.json({ success: true, status: lease.status })
   } catch (err) {
     console.error('[/api/lease/sign]', err.message)
@@ -762,6 +790,19 @@ app.get('/api/my-documents', async (req, res) => {
   } catch (err) {
     console.error('[my-documents]', err.message)
     res.status(500).json({ error: 'Could not load documents' })
+  }
+})
+
+// ─────────────────────────────────────────────────────────────
+// Screening affiliate click tracking (no PII)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/events/screening-click', (req, res) => {
+  try {
+    recordScreeningClick(req.body || {})
+    res.status(204).end()
+  } catch (err) {
+    console.error('[screening-click]', err.message)
+    res.status(500).json({ error: 'Could not record event' })
   }
 })
 

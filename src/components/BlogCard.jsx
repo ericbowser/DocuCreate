@@ -9,9 +9,13 @@ export default function BlogCard({ post }) {
           <span className="blog-badge blog-badge-state">{getStateLabel(post.state)}</span>
         )}
         {post.tags.slice(0, 2).map((tag) => (
-          <span key={tag} className="blog-badge">
+          <Link
+            key={tag}
+            to={`/blog?tag=${encodeURIComponent(tag)}`}
+            className="blog-badge hover:opacity-80 transition-opacity"
+          >
             {tag.replace(/-/g, ' ')}
-          </span>
+          </Link>
         ))}
       </div>
       <h2 className="blog-title blog-title--card">

@@ -41,12 +41,15 @@ import AddressFields from './AddressFields'
 import { PHONE_VALIDATE } from '../utils/phoneFormat'
 import { resolveLandlordAddress, resolvePropertyAddress } from '../utils/addressFormat'
 import { resolveVacateNotice, formatVacateNoticeSummary } from '../utils/stateLawService'
+import { SCREENING_PARTNER } from '../config/screeningPartner'
+import TenantScreeningStep from './TenantScreeningStep'
 
 const STEPS = [
   { id: 'doctype',    title: 'What type of lease do you need?',      subtitle: 'Choose the property type to generate the right agreement.' },
   { id: 'state',      title: 'Where is the property located?',        subtitle: 'State laws vary — we apply state-level reference rules as a starting point.' },
   { id: 'landlord',   title: 'Tell us about the landlord.',           subtitle: 'The property owner or authorized property manager.' },
   { id: 'tenant',     title: 'Tell us about the tenant.',             subtitle: 'The person or business that will be renting the property.' },
+  { id: 'screening',  title: 'Have you screened this tenant?',        subtitle: 'Optional tenant screening before you sign the lease.' },
   { id: 'property',   title: 'Where is the rental located?',          subtitle: 'Street address and unit details appear on the lease.' },
   { id: 'dates',      title: 'When does the lease start?',            subtitle: 'Choose the lease type and start date.' },
   { id: 'financials', title: 'What are the financial terms?',         subtitle: 'Rent, deposits, and move-in costs.' },
@@ -62,6 +65,7 @@ const STEP_FIELDS = [
   ['state'],
   ['landlordName', 'landlordStreet', 'landlordCity', 'landlordState', 'landlordZip', 'landlordPhone', 'landlordEmail'],
   ['tenantName', 'tenantPhone', 'tenantEmail'],
+  [],   // screening — optional, non-blocking
   ['propertyStreet', 'propertyCity', 'propertyState', 'propertyZip', 'propertyDescription'],
   ['startDate', 'landlordNoticeDays', 'tenantNoticeDays'],
   ['monthlyRent', 'securityDeposit', 'rentDueDay', 'lateFee'],
@@ -72,6 +76,10 @@ const STEP_FIELDS = [
 ]
 
 const UTILITIES = ['Water', 'Electric', 'Gas', 'Internet', 'Trash', 'Cable', 'Sewer']
+
+function skipScreeningStep(isCommercial) {
+  return isCommercial || !SCREENING_PARTNER.enabled
+}
 
 export default function LeaseWizard() {
   const { recoveryPasswordEnabled } = useAccessPolicy()
@@ -148,21 +156,29 @@ export default function LeaseWizard() {
     }
   }, [selectedState, setValue, allValues.landlordNoticeDays, allValues.tenantNoticeDays])
 
+  // Skip screening step when disabled or commercial (e.g. restored draft)
+  useEffect(() => {
+    if (step === 4 && skipScreeningStep(isCommercial)) {
+      setStep(5)
+    }
+  }, [step, isCommercial])
+
   // Default property state to lease governing state when opening property step
   useEffect(() => {
-    if (step === 4 && selectedState && !watch('propertyState')) {
+    if (step === 5 && selectedState && !watch('propertyState')) {
       setValue('propertyState', selectedState)
     }
   }, [step, selectedState, setValue, watch])
 
   const goNext = async () => {
     let fields = STEP_FIELDS[step]
-    if (step === 5 && !isMonthly) fields = [...fields, 'endDate']
-    if (step === 5) clearErrors(['landlordNoticeDays', 'tenantNoticeDays'])
-    // Skip pets step entirely for commercial leases
-    const skip = (step === 7 && isCommercial) ? 2 : 1
+    if (step === 6 && !isMonthly) fields = [...fields, 'endDate']
+    if (step === 6) clearErrors(['landlordNoticeDays', 'tenantNoticeDays'])
+    let skip = 1
+    if (step === 3 && skipScreeningStep(isCommercial)) skip = 2
+    if (step === 8 && isCommercial) skip = 2
     const valid = fields.length === 0 || await trigger(fields)
-    if (step === 5 && selectedState && valid) {
+    if (step === 6 && selectedState && valid) {
       const result = validateVacateNotice({
         stateCode: selectedState,
         landlordNoticeDays: allValues.landlordNoticeDays,
@@ -180,15 +196,16 @@ export default function LeaseWizard() {
   }
 
   const goBack = () => {
-    // When on rules step, skip back over pets for commercial
-    const skip = (step === 9 && isCommercial) ? 2 : 1
+    let skip = 1
+    if (step === 5 && skipScreeningStep(isCommercial)) skip = 2
+    if (step === 10 && isCommercial) skip = 2
     setStep(s => s - skip)
   }
 
   const onSubmit = async (data) => {
     setSubmitting(true)
     setSubmitError(null)
-    const { recoveryPassword, recoveryPasswordConfirm, ...formData } = data
+    const { recoveryPassword, recoveryPasswordConfirm, tenantScreeningStatus, ...formData } = data
     if (recoveryPassword || recoveryPasswordConfirm) {
       const pinError = validateRecoveryPin(recoveryPassword)
       if (pinError) {
@@ -411,8 +428,17 @@ export default function LeaseWizard() {
               </div>
             )}
 
-            {/* ── Step 4: Property ── */}
-            {step === 4 && (
+            {/* ── Step 4: Tenant screening (residential only) ── */}
+            {step === 4 && !skipScreeningStep(isCommercial) && (
+              <TenantScreeningStep
+                register={register}
+                watch={watch}
+                selectedState={selectedState}
+              />
+            )}
+
+            {/* ── Step 5: Property ── */}
+            {step === 5 && (
               <div className="grid grid-cols-1 gap-5">
                 <AddressFields prefix="property" register={register} errors={errors} inputClass={inputClass} streetAutoFocus />
                 <Field label={docType?.propertyLabel ?? 'Property Description'} error={errors.propertyDescription}>
@@ -447,8 +473,8 @@ export default function LeaseWizard() {
               </div>
             )}
 
-            {/* ── Step 5: Dates ── */}
-            {step === 5 && (
+            {/* ── Step 6: Dates ── */}
+            {step === 6 && (
               <div className="grid grid-cols-1 gap-5">
                 <Field label="Lease Type">
                   <div className="grid grid-cols-2 gap-3 mt-1">
@@ -472,13 +498,13 @@ export default function LeaseWizard() {
                   register={register}
                   errors={errors}
                   inputClass={inputClass}
-                  warnings={step === 5 ? vacateWarnings : []}
+                  warnings={step === 6 ? vacateWarnings : []}
                 />
               </div>
             )}
 
-            {/* ── Step 6: Financials ── */}
-            {step === 6 && (
+            {/* ── Step 7: Financials ── */}
+            {step === 7 && (
               <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Monthly Rent ($)" error={errors.monthlyRent}>
@@ -524,8 +550,8 @@ export default function LeaseWizard() {
               </div>
             )}
 
-            {/* ── Step 7: Utilities ── */}
-            {step === 7 && (
+            {/* ── Step 8: Utilities ── */}
+            {step === 8 && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">Select all that the landlord provides:</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -539,8 +565,8 @@ export default function LeaseWizard() {
               </div>
             )}
 
-            {/* ── Step 8: Pets ── */}
-            {step === 8 && (
+            {/* ── Step 9: Pets ── */}
+            {step === 9 && (
               <div className="space-y-5">
                 <Field label="Pet Policy" error={errors.petPolicy}>
                   <div className="grid grid-cols-1 gap-3 mt-1">
@@ -555,8 +581,8 @@ export default function LeaseWizard() {
               </div>
             )}
 
-            {/* ── Step 9: Rules ── */}
-            {step === 9 && (
+            {/* ── Step 10: Rules ── */}
+            {step === 10 && (
               <div className="space-y-4">
                 <Field label={isCommercial ? 'Operating Rules / Additional Terms' : 'House Rules / Additional Terms'}>
                   <textarea {...register('houseRules')} rows={5}
@@ -580,8 +606,8 @@ export default function LeaseWizard() {
               </div>
             )}
 
-            {/* ── Step 10: Review ── */}
-            {step === 10 && (
+            {/* ── Step 11: Review ── */}
+            {step === 11 && (
               <div className="space-y-4">
                 {editingDocumentId && (
                   <div className="info-panel text-sm text-body">

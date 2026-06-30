@@ -20,7 +20,8 @@
     "cy:open": "cypress open",
     "cy:run": "cypress run",
     "cy:lease": "cypress run --spec cypress/e2e/create-lease.cy.js",
-    "cy:lease:headed": "cypress run --spec cypress/e2e/create-lease.cy.js --headed --browser chrome --no-exit --config viewportWidth=1440,viewportHeight=900",
+    "cy:lease:headed": "cypress run --spec cypress/e2e/create-lease.cy.js --headed --browser chrome --config viewportWidth=1440,viewportHeight=900",
+    "cy:lease:watch": "cypress run --spec cypress/e2e/create-lease.cy.js --headed --browser chrome --no-exit --config viewportWidth=1440,viewportHeight=900,video=false",
     "cy:e2e": "start-server-and-test dev http://localhost:24333 cy:lease"
   },
   "dependencies": {

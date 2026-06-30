@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PageMeta from '../components/PageMeta'
 import CommentSection from '../components/CommentSection'
 import { LegalNotice } from '../components/LegalNotice'
+import BlogCTA from '../content/blog/BlogCTA'
 import {
   getPostBySlug,
   loadPostContent,
@@ -10,13 +11,41 @@ import {
   getStateLabel,
   BLOG_POSTS,
 } from '../content/blog/registry'
-import { SITE_URL } from '../config/brand'
+import { APP_NAME, COMPANY_NAME, SITE_URL } from '../config/brand'
 
 export default function BlogPost() {
   const { slug } = useParams()
   const post = getPostBySlug(slug)
   const [Content, setContent] = useState(null)
   const [contentReady, setContentReady] = useState(false)
+
+  const canonicalUrl = `${SITE_URL}/blog/${slug}`
+  const jsonLd = useMemo(() => {
+    if (!post) return null
+    const published = post.publishedAt ? new Date(post.publishedAt).toISOString() : undefined
+    const modified = post.updatedAt ? new Date(post.updatedAt).toISOString() : published
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.excerpt,
+      url: canonicalUrl,
+      mainEntityOfPage: canonicalUrl,
+      datePublished: published,
+      dateModified: modified,
+      author: { '@type': 'Organization', name: post.author || APP_NAME },
+      publisher: { '@type': 'Organization', name: COMPANY_NAME || APP_NAME },
+    }
+  }, [post, canonicalUrl])
+
+  useEffect(() => {
+    if (!jsonLd) return undefined
+    const el = document.createElement('script')
+    el.type = 'application/ld+json'
+    el.text = JSON.stringify(jsonLd)
+    document.head.appendChild(el)
+    return () => el.remove()
+  }, [jsonLd])
 
   useEffect(() => {
     if (!post) return undefined
@@ -56,7 +85,7 @@ export default function BlogPost() {
       <PageMeta
         title={post.title}
         description={post.excerpt}
-        canonical={`${SITE_URL}/blog/${post.slug}`}
+        canonical={canonicalUrl}
       />
       <div className="blog-layout">
         <article className="card-surface p-10 sm:p-14">
@@ -84,6 +113,10 @@ export default function BlogPost() {
               )}
               {' · '}{post.readingMinutes} min read · {post.author}
             </p>
+
+            <div className="mt-5">
+              <BlogCTA />
+            </div>
           </header>
 
           <div className="blog-prose">

@@ -111,7 +111,15 @@ describe('Create a Room Rental Lease', () => {
     cy.contains('button', 'Continue').click()
     cy.wait(500)
 
-    // ── Step 5: Property ───────────────────────────────────────
+    // ── Step 5: Tenant screening (optional) ────────────────────
+    cy.contains('Have you screened this tenant').should('be.visible')
+    cy.wait(400)
+    cy.contains('label', 'Skip for now').click()
+    cy.wait(300)
+    cy.contains('button', 'Continue').click()
+    cy.wait(500)
+
+    // ── Step 6: Property ───────────────────────────────────────
     cy.contains('Where is the rental located').should('be.visible')
     cy.wait(400)
     cy.get('[name="propertyStreet"]').type('200 Elm Street', { delay: TYPE_DELAY })

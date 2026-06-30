@@ -32,3 +32,43 @@ export async function userOwnsDocument(userId, documentId) {
   )
   return rows.length > 0
 }
+
+/**
+ * Update metadata on an existing document record by document_id.
+ * Safe to call without a userId (e.g. from Stripe webhook).
+ * Only provided fields are updated.
+ */
+export async function updateDocumentRecord(documentId, updates = {}) {
+  const setClauses = []
+  const values = []
+  let idx = 1
+
+  if (updates.title !== undefined) {
+    setClauses.push(`title = $${idx++}`)
+    values.push(updates.title)
+  }
+  if (updates.leaseType !== undefined) {
+    setClauses.push(`lease_type = $${idx++}`)
+    values.push(updates.leaseType)
+  }
+  if (updates.status !== undefined) {
+    setClauses.push(`status = $${idx++}`)
+    values.push(updates.status)
+  }
+  if (updates.paid !== undefined) {
+    setClauses.push(`paid = $${idx++}`)
+    values.push(updates.paid)
+  }
+
+  if (!setClauses.length) return
+
+  setClauses.push('updated_at = NOW()')
+  values.push(documentId)
+
+  await pool.query(
+    `UPDATE docucreate.documents
+     SET ${setClauses.join(', ')}
+     WHERE document_id = $${idx}`,
+    values,
+  )
+}
