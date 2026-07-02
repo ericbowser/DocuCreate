@@ -4,6 +4,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { encryptPayload, decryptPayload } from './crypto.js'
 import { generateAccessToken, hashAccessToken, verifyAccessToken, hashRecoveryPassword, verifyRecoveryPassword, validateRecoveryPin } from './documentAccess.js'
+import { isPaymentBypassed } from './stripe.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(__dirname, 'data')
@@ -102,17 +103,35 @@ export function createDocument(leaseData) {
   const id = crypto.randomUUID()
   const accessToken = generateAccessToken()
   const encrypted = encryptPayload(leaseData)
+  const freeUnlock = isPaymentBypassed()
+  const now = new Date().toISOString()
   documents.set(id, {
     id,
     encrypted,
     accessTokenHash: hashAccessToken(accessToken),
-    paymentStatus: 'pending',
+    paymentStatus: freeUnlock ? 'paid' : 'pending',
     stripeSessionId: null,
-    paidAt: null,
-    createdAt: new Date().toISOString(),
+    paidAt: freeUnlock ? now : null,
+    createdAt: now,
   })
   persistDocuments()
   return { id, accessToken }
+}
+
+/** When payments are off, mark any legacy pending docs as paid (idempotent). */
+export function unlockAllPendingIfBypassed() {
+  if (!isPaymentBypassed()) return 0
+  let count = 0
+  for (const [id, doc] of documents.entries()) {
+    if (doc.paymentStatus !== 'paid') {
+      doc.paymentStatus = 'paid'
+      doc.paidAt = doc.paidAt || new Date().toISOString()
+      documents.set(id, doc)
+      count++
+    }
+  }
+  if (count > 0) persistDocuments()
+  return count
 }
 
 export function getDocument(id) {

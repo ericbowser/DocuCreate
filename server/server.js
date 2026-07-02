@@ -28,6 +28,7 @@ import {
   buildMaskedPreview,
   markDocumentPaid,
   isDocumentPaid,
+  unlockAllPendingIfBypassed,
   verifyDocumentAccess,
   setDocumentRecoveryPassword,
   unlockDocumentWithPassword,
@@ -310,17 +311,21 @@ app.get('/api/documents/:id', async (req, res) => {
   const meta = getDocumentMeta(req.params.id)
   if (!meta) return res.status(404).json({ error: 'Document not found' })
 
-  const paid = isDocumentPaid(req.params.id) || isPaymentBypassed()
+  const bypassed = isPaymentBypassed()
+  const paid = isDocumentPaid(req.params.id) || bypassed
   const leaseData = getDecryptedLease(req.params.id)
   if (!leaseData) return res.status(500).json({ error: 'Document could not be read' })
 
+  const deliverFullLease = paid || bypassed
+
   res.json({
     ...meta,
-    paid,
-    paymentBypassed: isPaymentBypassed(),
+    paid: isDocumentPaid(req.params.id) || bypassed,
+    paymentBypassed: bypassed,
+    paymentsEnabled: isPaymentsEnabled(),
     price: getPriceDisplay(),
-    leaseData: paid ? leaseData : buildMaskedPreview(leaseData),
-    signing: paid ? buildSigningSummary(req.params.id) : null,
+    leaseData: deliverFullLease ? leaseData : buildMaskedPreview(leaseData),
+    signing: deliverFullLease ? buildSigningSummary(req.params.id) : null,
   })
 })
 
@@ -331,16 +336,17 @@ app.get('/api/documents/:id', async (req, res) => {
 app.post('/api/documents/:id/verify-payment', async (req, res) => {
   if (!await assertDocumentAccess(req, res, req.params.id)) return
 
-  const { sessionId } = req.body
-  if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
-
   if (isPaymentBypassed()) {
     markDocumentPaid(req.params.id, {})
     updateDocumentRecord(req.params.id, { paid: true }).catch(err =>
       console.error('[verify-payment] failed to sync paid to db', err.message)
     )
-    return res.json({ paid: true, bypassed: true })
+    const leaseData = getDecryptedLease(req.params.id)
+    return res.json({ paid: true, bypassed: true, leaseData })
   }
+
+  const { sessionId } = req.body
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
 
   const result = await verifyCheckoutSession(sessionId, req.params.id)
   if (!result.paid) return res.status(402).json({ error: result.error })
@@ -855,6 +861,11 @@ async function runMigrations() {
 
 await ensureSchema()
 await runMigrations()
+
+const unlockedLegacy = unlockAllPendingIfBypassed()
+if (unlockedLegacy > 0) {
+  console.log(`[payments] marked ${unlockedLegacy} pending document(s) as paid (free unlock mode)`)
+}
 
 app.listen(PORT, () => {
   const accessMode = isDocumentIdOnlyAccess() ? 'document-id only (dev)' : 'access token required'

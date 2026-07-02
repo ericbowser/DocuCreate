@@ -93,6 +93,27 @@ export default function Preview() {
         setTenantToken(data.signing.tenantToken)
         setLandlordToken(data.signing.landlordToken)
       }
+
+      // Server may return masked lease data when PAYMENTS_ENABLED=true on the API.
+      // Auto-unlock when payments are bypassed (free launch mode).
+      if (data.leaseData?._preview) {
+        try {
+          const unlockRes = await apiFetch(`/api/documents/${documentId}/verify-payment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            documentId,
+          })
+          const unlockData = await parseJsonResponse(unlockRes)
+          if (unlockRes.ok && unlockData.paid && unlockData.leaseData) {
+            setLeaseData(unlockData.leaseData)
+            setPaid(true)
+            setPaymentBypassed(Boolean(unlockData.bypassed))
+          }
+        } catch {
+          // leave masked — banner below explains production .env fix
+        }
+      }
     } catch (err) {
       setLoadError(err.message)
     } finally {
@@ -652,6 +673,14 @@ export default function Preview() {
                 Document ID access is enabled — use “Resume a lease” on the home page with this ID to reopen on another device.
               </p>
             ) : null}
+          </div>
+        )}
+        {leaseData?._preview && (
+          <div className="alert-error no-print mb-4 text-sm">
+            This lease is showing placeholder locks because payments are enabled on the server.
+            For free launch, set <code className="text-xs">PAYMENTS_ENABLED=false</code> or{' '}
+            <code className="text-xs">PAYMENT_BYPASS=true</code> in production <code className="text-xs">.env</code>,
+            then restart the API and recreate or reopen the lease.
           </div>
         )}
         {PAYMENTS_UI_ENABLED && !paid && !paymentBypassed && (
