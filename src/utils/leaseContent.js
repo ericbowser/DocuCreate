@@ -1,4 +1,4 @@
-import { buildMoveInCosts, fmt } from './leaseCalcs'
+import { buildMoveInCosts, fmt, buildFirstMonthReceivedParagraph } from './leaseCalcs'
 import { resolveLandlordAddress, resolvePropertyAddress } from './addressFormat'
 import { displayPhone } from './phoneFormat'
 import {
@@ -40,6 +40,7 @@ export function buildLeaseContent(data) {
 
   const today       = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const moveIn      = buildMoveInCosts(data)
+  const firstMonthReceivedParagraph = buildFirstMonthReceivedParagraph(moveIn)
   const returnDays  = stateData?.returnDays ?? 30
   const enterNotice = stateData?.noticeToEnter ?? '24 hours'
   const state = stateName ?? 'the applicable state'
@@ -145,7 +146,7 @@ export function buildLeaseContent(data) {
 
   return {
     leaseTitle, docTypeLabel, stateName, propLabel, tenantLabel,
-    isMonthly, isCommercial, today, moveIn, clauses, sections,
+    isMonthly, isCommercial, today, moveIn, firstMonthReceivedParagraph, clauses, sections,
     landlordName, landlordAddress,
     landlordPhone: displayPhone(landlordPhone),
     landlordEmail,

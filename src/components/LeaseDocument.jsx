@@ -53,7 +53,7 @@ export default function LeaseDocument({ data }) {
   const c = buildLeaseContent(data)
   const {
     leaseTitle, docTypeLabel, stateName, propLabel, tenantLabel,
-    isMonthly, isCommercial, today, moveIn, clauses,
+    isMonthly, isCommercial, today, moveIn, firstMonthReceivedParagraph, clauses,
     landlordName, landlordAddress, landlordPhone, landlordEmail,
     businessName, tenantName, tenantPhone, tenantEmail,
     propertyAddress, propDesc, furnished, sharedAreas, permittedUse, squareFootage,
@@ -122,15 +122,18 @@ export default function LeaseDocument({ data }) {
         <View style={S.costTable}>
           {moveIn.lines.map((line, i) => (
             <View key={i} style={[S.costRow, i % 2 !== 0 && S.costRowAlt]}>
-              <Text style={S.costLabel}>{line.label}</Text>
+              <Text style={S.costLabel}>{line.label}{line.paid ? ' (received)' : ''}</Text>
               <Text style={S.costAmount}>${fmt(line.amount)}</Text>
             </View>
           ))}
           <View style={S.costTotalRow}>
             <Text style={S.costTotalLbl}>Total Due at Signing</Text>
-            <Text style={S.costTotalAmt}>${fmt(moveIn.total)}</Text>
+            <Text style={S.costTotalAmt}>${fmt(moveIn.totalDue ?? moveIn.total)}</Text>
           </View>
         </View>
+        {firstMonthReceivedParagraph && (
+          <Text style={[S.clauseText, { marginTop: 4 }]}>{firstMonthReceivedParagraph}</Text>
+        )}
         {moveIn.proration && (
           <Text style={[S.clauseText, { marginTop: 4 }]}>
             Pro-ration: {moveIn.proration.label} = ${fmt(moveIn.proration.dailyRate)}/day × {moveIn.proration.days} days.

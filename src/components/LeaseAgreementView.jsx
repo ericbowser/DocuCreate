@@ -129,7 +129,7 @@ export default function LeaseAgreementView({ data, locked = false }) {
                 </tr>
               ) : c.moveIn.lines.map((line, i) => (
                 <tr key={i} className={i % 2 !== 0 ? 'doc-table-alt' : ''}>
-                  <td>{line.label}</td>
+                  <td>{line.label}{line.paid ? ' (received)' : ''}</td>
                   <td>{money(line.amount)}</td>
                 </tr>
               ))}
@@ -137,10 +137,13 @@ export default function LeaseAgreementView({ data, locked = false }) {
             <tfoot>
               <tr>
                 <td>Total Due at Signing</td>
-                <td>{locked && c.moveIn.total === 0 ? '••••' : money(c.moveIn.total)}</td>
+                <td>{locked && c.moveIn.total === 0 ? '••••' : money(c.moveIn.totalDue ?? c.moveIn.total)}</td>
               </tr>
             </tfoot>
           </table>
+          {!locked && c.firstMonthReceivedParagraph && (
+            <p className="doc-paragraph doc-paragraph-sm">{c.firstMonthReceivedParagraph}</p>
+          )}
           {!locked && c.moveIn.proration && (
             <p className="doc-paragraph doc-paragraph-sm">
               Pro-ration: {c.moveIn.proration.label} = ${fmt(c.moveIn.proration.dailyRate)}/day × {c.moveIn.proration.days} days.

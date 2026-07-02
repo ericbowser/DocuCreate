@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { STATE_LAWS, STATES } from '../data/stateLaws'
 import { DOC_TYPES, getDocType } from '../data/documentTypes'
-import { buildMoveInCosts, fmt } from '../utils/leaseCalcs'
+import { buildMoveInCosts, fmt, formatReceivedDate } from '../utils/leaseCalcs'
 import {
   loadWizardDraft,
   saveWizardDraft,
@@ -127,6 +127,7 @@ export default function LeaseWizard() {
   const selectedState = watch('state')
   const leaseType    = watch('leaseType')
   const monthlyRent  = parseFloat(watch('monthlyRent')) || 0
+  const firstMonthReceived = watch('firstMonthRentReceived')
   const stateData    = selectedState ? STATE_LAWS[selectedState] : null
   const depositMax   = stateData?.depositMax ? monthlyRent * stateData.depositMax : null
   const progress     = Math.round((step / (STEPS.length - 1)) * 100)
@@ -535,6 +536,23 @@ export default function LeaseWizard() {
                   </div>
                 </label>
 
+                <div className="border card-border rounded-xl p-4 space-y-3 bg-slate-50/80 dark:bg-white/[0.04]">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" {...register('firstMonthRentReceived')} className="w-4 h-4 accent-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-sm font-medium text-body">First month's rent already received</span>
+                      <p className="text-xs text-muted mt-0.5">
+                        Use this when you collected rent before signing — the lease will note payment received and show the remaining balance due.
+                      </p>
+                    </div>
+                  </label>
+                  {firstMonthReceived && (
+                    <Field label="Date received — optional">
+                      <input type="date" {...register('firstMonthRentReceivedDate')} className={inputClass()} />
+                    </Field>
+                  )}
+                </div>
+
                 {stateData && (
                   <div className="warn-panel space-y-1.5">
                     <p className="text-xs font-bold uppercase tracking-widest mb-2">{stateData.name} Financial Rules</p>
@@ -677,6 +695,7 @@ export default function LeaseWizard() {
 
 // ── Move-In Cost Preview ──
 function MoveInPreview({ costs }) {
+  const dueTotal = costs.totalDue ?? costs.total
   return (
     <div className="border card-border rounded-xl overflow-hidden shadow-card-sm">
       <div className="bg-slate-50 dark:bg-white/[0.06] px-4 py-2.5 border-b border-line dark:border-white/[0.10]">
@@ -685,14 +704,28 @@ function MoveInPreview({ costs }) {
       <div className="divide-y divide-line dark:divide-line-dark">
         {costs.lines.map((line, i) => (
           <div key={i} className="flex justify-between px-4 py-2.5">
-            <span className="text-sm text-muted">{line.label}</span>
-            <span className="text-sm font-medium text-heading">${fmt(line.amount)}</span>
+            <span className="text-sm text-muted">
+              {line.label}
+              {line.paid && ' (received)'}
+            </span>
+            <span className={`text-sm font-medium ${line.paid ? 'text-green-700 dark:text-green-400' : 'text-heading'}`}>
+              ${fmt(line.amount)}
+            </span>
           </div>
         ))}
       </div>
+      {costs.amountReceived > 0 && (
+        <div className="flex justify-between px-4 py-2.5 bg-green-50 dark:bg-green-900/20 border-t border-line dark:border-line-dark">
+          <span className="text-sm text-muted">
+            Already received
+            {formatReceivedDate(costs.firstMonthReceivedDate) && ` on ${formatReceivedDate(costs.firstMonthReceivedDate)}`}
+          </span>
+          <span className="text-sm font-medium text-green-700 dark:text-green-400">${fmt(costs.amountReceived)}</span>
+        </div>
+      )}
       <div className="flex justify-between px-4 py-3 bg-green-600/70">
         <span className="text-sm font-bold text-white">Total Due at Signing</span>
-        <span className="text-sm font-bold text-white">${fmt(costs.total)}</span>
+        <span className="text-sm font-bold text-white">${fmt(dueTotal)}</span>
       </div>
     </div>
   )
@@ -739,6 +772,14 @@ function ReviewSummary({ watch, stateData, docType, moveInCosts }) {
     { label: 'Monthly Rent',  value: v.monthlyRent ? `$${fmt(v.monthlyRent)}` : '—' },
     { label: 'Rent Due',      value: v.rentDueDay ? `Day ${v.rentDueDay} of each month` : '—' },
     { label: 'Late Fee',      value: v.lateFee ? `$${v.lateFee}` : '—' },
+    {
+      label: 'First month rent',
+      value: v.firstMonthRentReceived
+        ? `Received${v.firstMonthRentReceivedDate ? ` on ${formatReceivedDate(v.firstMonthRentReceivedDate)}` : ''}`
+        : 'Due at signing',
+      hide: !v.firstMonthRentReceived,
+    },
+    { label: 'Due at signing', value: `$${fmt(moveInCosts.totalDue ?? moveInCosts.total)}` },
     { label: 'Utilities',     value: Array.isArray(v.utilities) && v.utilities.length ? v.utilities.join(', ') : 'None included' },
     { label: 'Pet Policy',    value: v.petPolicy ?? '—',     hide: docType?.isCommercial },
   ].filter(r => !r.hide)

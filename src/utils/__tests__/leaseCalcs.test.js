@@ -43,6 +43,21 @@ describe('leaseCalcs', () => {
       })
       expect(lines[0].label).toMatch(/Pro-rated Rent/)
     })
+
+    it('excludes received first month from totalDue', () => {
+      const result = buildMoveInCosts({
+        startDate: '2026-06-01',
+        monthlyRent: '1000',
+        securityDeposit: '500',
+        firstMonthRentReceived: true,
+        firstMonthRentReceivedDate: '2026-05-28',
+      })
+      expect(result.lines[0].paid).toBe(true)
+      expect(result.total).toBe(1500)
+      expect(result.totalDue).toBe(500)
+      expect(result.amountReceived).toBe(1000)
+      expect(result.firstMonthReceivedDate).toBe('2026-05-28')
+    })
   })
 
   describe('fmt', () => {

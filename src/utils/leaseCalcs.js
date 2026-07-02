@@ -25,6 +25,7 @@ export function calcProration(startDate, monthlyRent) {
 
 /**
  * Build itemized move-in cost lines and total due at signing.
+ * When firstMonthRentReceived is set, the first rent line is marked paid and excluded from totalDue.
  */
 export function buildMoveInCosts(data) {
   const rent      = parseFloat(data.monthlyRent)     || 0
@@ -33,13 +34,14 @@ export function buildMoveInCosts(data) {
   const keyDep    = parseFloat(data.keyDeposit)      || 0
   const parkDep   = parseFloat(data.parkingDeposit)  || 0
   const proration = calcProration(data.startDate, rent)
+  const firstMonthReceived = Boolean(data.firstMonthRentReceived)
 
   const lines = []
 
   if (proration) {
-    lines.push({ label: proration.label, amount: proration.amount })
-  } else {
-    lines.push({ label: "First Month's Rent", amount: rent })
+    lines.push({ label: proration.label, amount: proration.amount, paid: firstMonthReceived })
+  } else if (rent > 0) {
+    lines.push({ label: "First Month's Rent", amount: rent, paid: firstMonthReceived })
   }
 
   if (data.requireLastMonth) {
@@ -52,8 +54,17 @@ export function buildMoveInCosts(data) {
   if (parkDep > 0) lines.push({ label: 'Parking Deposit',      amount: parkDep })
 
   const total = lines.reduce((sum, l) => sum + l.amount, 0)
+  const amountReceived = lines.filter((l) => l.paid).reduce((sum, l) => sum + l.amount, 0)
+  const totalDue = lines.filter((l) => !l.paid).reduce((sum, l) => sum + l.amount, 0)
 
-  return { lines, total, proration }
+  return {
+    lines,
+    total,
+    totalDue,
+    amountReceived,
+    firstMonthReceivedDate: firstMonthReceived ? (data.firstMonthRentReceivedDate || null) : null,
+    proration,
+  }
 }
 
 export const fmt = (n) => {
@@ -62,4 +73,21 @@ export const fmt = (n) => {
   const num = Number(n)
   if (Number.isNaN(num)) return String(n)
   return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+export function formatReceivedDate(isoDate) {
+  if (!isoDate) return null
+  const d = new Date(isoDate + 'T12:00:00')
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+/** Acknowledgment paragraph when first month rent was received before signing. */
+export function buildFirstMonthReceivedParagraph(moveIn) {
+  if (!moveIn?.amountReceived) return null
+  const rentLine = moveIn.lines.find((l) => l.paid)
+  if (!rentLine) return null
+  const datePart = formatReceivedDate(moveIn.firstMonthReceivedDate)
+  const when = datePart ? ` on ${datePart}` : ' prior to execution of this Agreement'
+  return `Landlord acknowledges receipt of $${fmt(moveIn.amountReceived)} for ${rentLine.label}${when}.`
 }
