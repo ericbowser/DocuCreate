@@ -13,9 +13,18 @@ if (stripeEnabled) {
   stripe = new Stripe(STRIPE_SECRET)
 }
 
-/** Payments are opt-in: set PAYMENTS_ENABLED=true and configure Stripe keys to charge. */
+/**
+ * Paywall is OFF by default (free launch).
+ * To charge for leases you must set ALL of:
+ *   PAYMENTS_ENABLED=true
+ *   CHARGE_LEASES=true
+ *   STRIPE_SECRET_KEY=sk_...
+ * PAYMENT_BYPASS=true always keeps unlock free (even with Stripe keys present).
+ */
 export function isPaymentsEnabled() {
   if (process.env.PAYMENT_BYPASS === 'true') return false
+  // Require explicit CHARGE_LEASES so Stripe sandbox setup alone does not lock documents
+  if (process.env.CHARGE_LEASES !== 'true') return false
   return process.env.PAYMENTS_ENABLED === 'true' && stripeEnabled
 }
 

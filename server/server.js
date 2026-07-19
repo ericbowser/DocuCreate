@@ -477,6 +477,11 @@ app.post('/api/lease/send', async (req, res) => {
   let data = leaseData
   if (documentId) {
     if (!await assertDocumentAccess(req, res, documentId)) return
+    // Free launch: auto-unlock before send when payments are bypassed
+    if (isPaymentBypassed() && !isDocumentPaid(documentId)) {
+      markDocumentPaid(documentId, {})
+      updateDocumentRecord(documentId, { paid: true }).catch(() => {})
+    }
     if (!isDocumentPaid(documentId) && !isPaymentBypassed()) {
       return res.status(402).json({ error: 'Payment required before sending for signature' })
     }
@@ -529,6 +534,10 @@ app.post('/api/lease/resend', async (req, res) => {
   if (!await assertDocumentAccess(req, res, documentId)) return
   if (!['all', 'tenant', 'landlord'].includes(party)) {
     return res.status(400).json({ error: 'party must be all, tenant, or landlord' })
+  }
+  if (isPaymentBypassed() && !isDocumentPaid(documentId)) {
+    markDocumentPaid(documentId, {})
+    updateDocumentRecord(documentId, { paid: true }).catch(() => {})
   }
   if (!isDocumentPaid(documentId) && !isPaymentBypassed()) {
     return res.status(402).json({ error: 'Payment required before resending signature emails' })
@@ -825,6 +834,7 @@ app.get('/api/health', (req, res) => {
     stripeEnabled,
     paymentsEnabled: isPaymentsEnabled(),
     paymentBypassed: isPaymentBypassed(),
+    chargeLeases: process.env.CHARGE_LEASES === 'true',
     price: getPriceDisplay(),
     appUrl: APP_URL,
     encryptionKeySet: Boolean(process.env.DOCUMENT_ENCRYPTION_KEY),

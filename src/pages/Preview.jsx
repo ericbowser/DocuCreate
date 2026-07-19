@@ -295,6 +295,10 @@ export default function Preview() {
 
   const handleSend = async () => {
     if (PAYMENTS_UI_ENABLED && !paid) return
+    if (leaseData?._preview) {
+      setSendError('This lease is still locked. Refresh the page after deploying free-unlock, or set CHARGE_LEASES=false on the server.')
+      return
+    }
     setSending(true)
     setSendError(null)
     setResendNote(null)
@@ -315,6 +319,8 @@ export default function Preview() {
           signing: data.signing,
         })
         setSendError('This lease was already sent. Use resend below to email the links again.')
+      } else if (res.status === 402) {
+        setSendError('Payment is still required on the server. Set CHARGE_LEASES=false (or PAYMENT_BYPASS=true), restart the API, then try again.')
       } else {
         setSendError(data.error || 'Failed to send.')
       }
@@ -677,10 +683,10 @@ export default function Preview() {
         )}
         {leaseData?._preview && (
           <div className="alert-error no-print mb-4 text-sm">
-            This lease is showing placeholder locks because payments are enabled on the server.
-            For free launch, set <code className="text-xs">PAYMENTS_ENABLED=false</code> or{' '}
-            <code className="text-xs">PAYMENT_BYPASS=true</code> in production <code className="text-xs">.env</code>,
-            then restart the API and recreate or reopen the lease.
+            This lease is locked because the server is charging for documents.
+            For free launch, remove <code className="text-xs">CHARGE_LEASES=true</code> (or set{' '}
+            <code className="text-xs">PAYMENT_BYPASS=true</code>) in production <code className="text-xs">.env</code>,
+            restart the API, then reopen this lease.
           </div>
         )}
         {PAYMENTS_UI_ENABLED && !paid && !paymentBypassed && (
