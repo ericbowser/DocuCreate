@@ -18,6 +18,7 @@ import {
   buildSigningSummary,
   signLease,
   deleteLeasesByDocumentId,
+  getSigningArtifacts,
 } from './leaseStore.js'
 import {
   createDocument,
@@ -313,8 +314,36 @@ app.get('/api/documents/:id', async (req, res) => {
 
   const bypassed = isPaymentBypassed()
   const paid = isDocumentPaid(req.params.id) || bypassed
-  const leaseData = getDecryptedLease(req.params.id)
+  let leaseData = getDecryptedLease(req.params.id)
   if (!leaseData) return res.status(500).json({ error: 'Document could not be read' })
+
+  // Merge e-signature artifacts from signing store (covers docs signed before we persisted them)
+  const artifacts = getSigningArtifacts(req.params.id)
+  if (artifacts) {
+    const needsPersist =
+      (artifacts.tenantSignatureData && !leaseData.tenantSignatureData) ||
+      (artifacts.landlordSignatureData && !leaseData.landlordSignatureData) ||
+      (artifacts.tenantSignedAt && !leaseData.tenantSignedAt) ||
+      (artifacts.landlordSignedAt && !leaseData.landlordSignedAt)
+
+    leaseData = {
+      ...leaseData,
+      tenantPrintedName: artifacts.tenantPrintedName ?? leaseData.tenantPrintedName,
+      tenantSignedAt: artifacts.tenantSignedAt ?? leaseData.tenantSignedAt,
+      tenantSignatureData: artifacts.tenantSignatureData ?? leaseData.tenantSignatureData,
+      landlordPrintedName: artifacts.landlordPrintedName ?? leaseData.landlordPrintedName,
+      landlordSignedAt: artifacts.landlordSignedAt ?? leaseData.landlordSignedAt,
+      landlordSignatureData: artifacts.landlordSignatureData ?? leaseData.landlordSignatureData,
+    }
+
+    if (needsPersist) {
+      try {
+        updateDocument(req.params.id, leaseData)
+      } catch (err) {
+        console.error('[documents] failed to persist signature artifacts', err.message)
+      }
+    }
+  }
 
   const deliverFullLease = paid || bypassed
 
@@ -620,8 +649,10 @@ app.post('/api/lease/:token/sign', async (req, res) => {
         ...docData,
         tenantPrintedName: lease.tenantPrintedName,
         tenantSignedAt: lease.tenantSignedAt,
+        tenantSignatureData: lease.tenantSignatureData ?? docData.tenantSignatureData ?? null,
         landlordPrintedName: lease.landlordPrintedName,
         landlordSignedAt: lease.landlordSignedAt,
+        landlordSignatureData: lease.landlordSignatureData ?? docData.landlordSignatureData ?? null,
       })
     }
   }

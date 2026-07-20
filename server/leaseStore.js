@@ -199,6 +199,30 @@ export function buildSigningSummary(documentId) {
   }
 }
 
+/** Signature fields from the signing store (for merging into the lease document). */
+export function getSigningArtifacts(documentId) {
+  if (!documentId) return null
+  for (const lease of leases.values()) {
+    if (lease.documentId !== documentId) continue
+    if (
+      lease.tenantSignedAt ||
+      lease.landlordSignedAt ||
+      lease.tenantSignatureData ||
+      lease.landlordSignatureData
+    ) {
+      return {
+        tenantPrintedName: lease.tenantPrintedName ?? null,
+        tenantSignedAt: lease.tenantSignedAt ?? null,
+        tenantSignatureData: lease.tenantSignatureData ?? null,
+        landlordPrintedName: lease.landlordPrintedName ?? null,
+        landlordSignedAt: lease.landlordSignedAt ?? null,
+        landlordSignatureData: lease.landlordSignatureData ?? null,
+      }
+    }
+  }
+  return null
+}
+
 export function deleteLeasesByDocumentId(documentId) {
   if (!documentId) return 0
   let removed = 0

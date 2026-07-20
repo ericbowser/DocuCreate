@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { APP_NAME } from '../config/brand'
 import { buildMoveInCosts, fmt } from '../utils/leaseCalcs'
 import { buildLeaseContent } from '../utils/leaseContent'
@@ -32,10 +32,13 @@ const S = StyleSheet.create({
   sigSection:    { marginTop: 24 },
   sigGrid:       { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
   sigBlock:      { width: '47%' },
-  sigLine:       { borderBottomWidth: 1, borderBottomColor: '#000', height: 36, marginBottom: 4 },
+  sigLine:       { borderBottomWidth: 1, borderBottomColor: '#000', minHeight: 40, marginBottom: 4, justifyContent: 'flex-end' },
+  sigImage:      { maxHeight: 36, maxWidth: 180, objectFit: 'contain', marginBottom: 2 },
+  sigTyped:      { fontSize: 18, fontFamily: 'Times-Italic', marginBottom: 2 },
   sigLabel:      { fontSize: 8.5, color: '#6b7280' },
   sigName:       { fontSize: 8.5, color: '#374151', marginTop: 2 },
-  dateLine:      { borderBottomWidth: 1, borderBottomColor: '#9ca3af', height: 22, marginTop: 10, marginBottom: 4 },
+  dateLine:      { borderBottomWidth: 1, borderBottomColor: '#9ca3af', minHeight: 22, marginTop: 10, marginBottom: 4, justifyContent: 'flex-end' },
+  dateFilled:    { fontSize: 9, color: '#111827', marginBottom: 2 },
   eSigBox:       { marginTop: 20, padding: 10, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 4 },
   eSigTitle:     { fontSize: 9, fontWeight: 'bold', color: '#15803d', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   eSigText:      { fontSize: 9, color: '#166534' },
@@ -62,6 +65,7 @@ export default function LeaseDocument({ data }) {
     utilitiesText, petPolicy, petDeposit, houseRules,
     tenantPrintedName, tenantSignedAt,
     landlordPrintedName, landlordSignedAt,
+    tenantSignatureData, landlordSignatureData,
   } = c
   const vacateClause = clauses.find((cl) => cl.title === 'Notice to Vacate')
   const stateData = data.stateData
@@ -248,17 +252,45 @@ export default function LeaseDocument({ data }) {
 
           <View style={S.sigGrid}>
             <View style={S.sigBlock}>
-              <View style={S.sigLine} />
+              <View style={S.sigLine}>
+                {landlordSignatureData ? (
+                  <Image src={landlordSignatureData} style={S.sigImage} />
+                ) : landlordPrintedName && landlordSignedAt ? (
+                  <Text style={S.sigTyped}>{landlordPrintedName}</Text>
+                ) : null}
+              </View>
               <Text style={S.sigLabel}>Landlord Signature</Text>
               <Text style={S.sigName}>{landlordName}</Text>
-              <View style={S.dateLine} />
+              <View style={S.dateLine}>
+                {landlordSignedAt ? (
+                  <Text style={S.dateFilled}>
+                    {new Date(landlordSignedAt).toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                    })}
+                  </Text>
+                ) : null}
+              </View>
               <Text style={S.sigLabel}>Date</Text>
             </View>
             <View style={S.sigBlock}>
-              <View style={S.sigLine} />
+              <View style={S.sigLine}>
+                {tenantSignatureData ? (
+                  <Image src={tenantSignatureData} style={S.sigImage} />
+                ) : tenantPrintedName && tenantSignedAt ? (
+                  <Text style={S.sigTyped}>{tenantPrintedName}</Text>
+                ) : null}
+              </View>
               <Text style={S.sigLabel}>{tenantLabel} Signature</Text>
               <Text style={S.sigName}>{businessName ? `${businessName} — ${tenantName}` : tenantName}</Text>
-              <View style={S.dateLine} />
+              <View style={S.dateLine}>
+                {tenantSignedAt ? (
+                  <Text style={S.dateFilled}>
+                    {new Date(tenantSignedAt).toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                    })}
+                  </Text>
+                ) : null}
+              </View>
               <Text style={S.sigLabel}>Date</Text>
             </View>
           </View>

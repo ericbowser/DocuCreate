@@ -210,19 +210,55 @@ export default function LeaseAgreementView({ data, locked = false }) {
           </p>
           <div className="doc-sig-grid">
             <div className="doc-sig-block">
-              <div className="doc-sig-line" />
+              <div className="doc-sig-line">
+                {c.landlordSignatureData ? (
+                  <img
+                    src={c.landlordSignatureData}
+                    alt={`Signature of ${c.landlordPrintedName || c.landlordName}`}
+                    className="doc-sig-image"
+                  />
+                ) : c.landlordPrintedName && c.landlordSignedAt ? (
+                  <span className="doc-sig-typed">{c.landlordPrintedName}</span>
+                ) : null}
+              </div>
               <p className="doc-sig-label">Landlord Signature</p>
               <p className="doc-sig-name">{c.landlordName}</p>
-              <div className="doc-date-line" />
+              <div className="doc-date-line">
+                {c.landlordSignedAt && (
+                  <span className="doc-sig-date">
+                    {new Date(c.landlordSignedAt).toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                    })}
+                  </span>
+                )}
+              </div>
               <p className="doc-sig-label">Date</p>
             </div>
             <div className="doc-sig-block">
-              <div className="doc-sig-line" />
+              <div className="doc-sig-line">
+                {c.tenantSignatureData ? (
+                  <img
+                    src={c.tenantSignatureData}
+                    alt={`Signature of ${c.tenantPrintedName || c.tenantName}`}
+                    className="doc-sig-image"
+                  />
+                ) : c.tenantPrintedName && c.tenantSignedAt ? (
+                  <span className="doc-sig-typed">{c.tenantPrintedName}</span>
+                ) : null}
+              </div>
               <p className="doc-sig-label">{c.tenantLabel} Signature</p>
               <p className="doc-sig-name">
                 {c.businessName ? `${c.businessName} — ${c.tenantName}` : c.tenantName}
               </p>
-              <div className="doc-date-line" />
+              <div className="doc-date-line">
+                {c.tenantSignedAt && (
+                  <span className="doc-sig-date">
+                    {new Date(c.tenantSignedAt).toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                    })}
+                  </span>
+                )}
+              </div>
               <p className="doc-sig-label">Date</p>
             </div>
           </div>

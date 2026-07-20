@@ -403,11 +403,24 @@
   }
 
   .doc-sig-line {
-    @apply border-b border-gray-900 h-10 mb-1;
+    @apply border-b border-gray-900 min-h-10 mb-1 flex items-end;
+  }
+
+  .doc-sig-image {
+    @apply max-h-12 w-auto max-w-full object-contain mb-0.5;
+  }
+
+  .doc-sig-typed {
+    @apply text-2xl text-gray-900 leading-none mb-0.5;
+    font-family: 'Brush Script MT', 'Segoe Script', cursive;
+  }
+
+  .doc-sig-date {
+    @apply text-sm text-gray-800;
   }
 
   .doc-date-line {
-    @apply border-b border-gray-400 h-7 mt-4 mb-1;
+    @apply border-b border-gray-400 min-h-7 mt-4 mb-1 flex items-end;
   }
 
   .doc-sig-label {
