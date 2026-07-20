@@ -682,11 +682,22 @@ export default function Preview() {
           </div>
         )}
         {leaseData?._preview && (
-          <div className="alert-error no-print mb-4 text-sm">
-            This lease is locked because the server is charging for documents.
-            For free launch, remove <code className="text-xs">CHARGE_LEASES=true</code> (or set{' '}
-            <code className="text-xs">PAYMENT_BYPASS=true</code>) in production <code className="text-xs">.env</code>,
-            restart the API, then reopen this lease.
+          <div className="alert-error no-print mb-4 text-sm space-y-2">
+            <p>
+              This lease is locked because the API is still in charge mode
+              (<code className="text-xs">paymentsEnabled=true</code>).
+            </p>
+            <p>
+              On the Pi <code className="text-xs">.env</code>, use exactly:
+            </p>
+            <pre className="text-xs bg-black/20 p-2 rounded overflow-x-auto">{`PAYMENT_BYPASS=true
+CHARGE_LEASES=false
+PAYMENTS_ENABLED=false`}</pre>
+            <p>
+              Then restart the API process (pm2 / systemd), and check{' '}
+              <code className="text-xs">/api/health</code> shows{' '}
+              <code className="text-xs">paymentBypassed: true</code>. Soft-refresh this page after.
+            </p>
           </div>
         )}
         {PAYMENTS_UI_ENABLED && !paid && !paymentBypassed && (

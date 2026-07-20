@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import { APP_NAME } from './brand.js'
+import { envFlagTrue } from './loadEnv.js'
 
 const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
@@ -20,12 +21,13 @@ if (stripeEnabled) {
  *   CHARGE_LEASES=true
  *   STRIPE_SECRET_KEY=sk_...
  * PAYMENT_BYPASS=true always keeps unlock free (even with Stripe keys present).
+ * CHARGE_LEASES=false / unset / anything other than true → free unlock.
  */
 export function isPaymentsEnabled() {
-  if (process.env.PAYMENT_BYPASS === 'true') return false
+  if (envFlagTrue('PAYMENT_BYPASS')) return false
   // Require explicit CHARGE_LEASES so Stripe sandbox setup alone does not lock documents
-  if (process.env.CHARGE_LEASES !== 'true') return false
-  return process.env.PAYMENTS_ENABLED === 'true' && stripeEnabled
+  if (!envFlagTrue('CHARGE_LEASES')) return false
+  return envFlagTrue('PAYMENTS_ENABLED') && stripeEnabled
 }
 
 export function isPaymentBypassed() {

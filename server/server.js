@@ -1,4 +1,5 @@
 import './loadEnv.js'
+import { envFlagTrue } from './loadEnv.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -346,6 +347,11 @@ app.get('/api/documents/:id', async (req, res) => {
   }
 
   const deliverFullLease = paid || bypassed
+
+  if (deliverFullLease && leaseData?._preview) {
+    const { _preview, ...rest } = leaseData
+    leaseData = rest
+  }
 
   res.json({
     ...meta,
@@ -865,7 +871,9 @@ app.get('/api/health', (req, res) => {
     stripeEnabled,
     paymentsEnabled: isPaymentsEnabled(),
     paymentBypassed: isPaymentBypassed(),
-    chargeLeases: process.env.CHARGE_LEASES === 'true',
+    chargeLeases: envFlagTrue('CHARGE_LEASES'),
+    paymentBypassFlag: envFlagTrue('PAYMENT_BYPASS'),
+    paymentsEnabledFlag: envFlagTrue('PAYMENTS_ENABLED'),
     price: getPriceDisplay(),
     appUrl: APP_URL,
     encryptionKeySet: Boolean(process.env.DOCUMENT_ENCRYPTION_KEY),
