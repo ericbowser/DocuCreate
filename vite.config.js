@@ -31,6 +31,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 24333,
+      // Required when nginx proxies docu-create.com to the Vite dev server (e.g. on Pi).
+      // Production should serve `dist/` statically instead of running `npm run dev`.
+      allowedHosts: ['docu-create.com', 'www.docu-create.com', 'localhost'],
       proxy: {
         '/api': {
           target: `http://localhost:${apiPort}`,
