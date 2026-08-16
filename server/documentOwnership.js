@@ -33,6 +33,21 @@ export async function userOwnsDocument(userId, documentId) {
   return rows.length > 0
 }
 
+/** Remove the My Documents row (and optionally scope to the owner). */
+export async function deleteUserDocument(documentId, userId = null) {
+  if (userId) {
+    await pool.query(
+      `DELETE FROM docucreate.documents WHERE document_id = $1 AND user_id = $2`,
+      [documentId, userId],
+    )
+    return
+  }
+  await pool.query(
+    `DELETE FROM docucreate.documents WHERE document_id = $1`,
+    [documentId],
+  )
+}
+
 /**
  * Update metadata on an existing document record by document_id.
  * Safe to call without a userId (e.g. from Stripe webhook).

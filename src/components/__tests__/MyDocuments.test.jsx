@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import MyDocuments from '../../pages/MyDocuments'
 import { renderWithProviders } from '../../test/test-utils'
 
@@ -23,19 +23,27 @@ const mockDocuments = [
   },
 ]
 
+function jsonResponse(body, ok = true) {
+  return Promise.resolve({
+    ok,
+    status: ok ? 200 : 400,
+    headers: { get: () => 'application/json' },
+    json: () => Promise.resolve(body),
+  })
+}
+
 function mockFetch(documents = mockDocuments) {
-  global.fetch = jest.fn((url) => {
+  global.fetch = jest.fn((url, options = {}) => {
     const path = String(url)
+    const method = (options.method || 'GET').toUpperCase()
     if (path.includes('/api/auth/me')) {
-      return Promise.resolve({
-        json: () => Promise.resolve({ user: { id: '1', email: 'test@example.com' } }),
-      })
+      return jsonResponse({ user: { id: '1', email: 'test@example.com' } })
+    }
+    if (method === 'DELETE' && path.includes('/api/documents/')) {
+      return jsonResponse({ deleted: true })
     }
     if (path.includes('/api/my-documents')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ documents }),
-      })
+      return jsonResponse({ documents })
     }
     return Promise.reject(new Error(`Unexpected fetch: ${url}`))
   })
@@ -65,11 +73,20 @@ describe('MyDocuments page', () => {
     expect(await screen.findByText('executed')).toBeInTheDocument()
   })
 
-  it('renders Open links for each document', async () => {
+  it('renders Open and Delete actions for each document', async () => {
     renderWithProviders(<MyDocuments />)
     const links = await screen.findAllByText('Open →')
     expect(links).toHaveLength(2)
     expect(links[0].closest('a')).toHaveAttribute('href', '/preview/doc-abc-123')
+    expect(await screen.findAllByRole('button', { name: /delete/i })).toHaveLength(2)
+  })
+
+  it('asks for confirmation before deleting', async () => {
+    renderWithProviders(<MyDocuments />)
+    const deleteButtons = await screen.findAllByRole('button', { name: /delete/i })
+    fireEvent.click(deleteButtons[0])
+    expect(await screen.findByText(/delete this lease permanently/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /yes, delete/i })).toBeInTheDocument()
   })
 
   it('shows empty state when no documents', async () => {

@@ -1,9 +1,9 @@
-import { API } from './api'
+import { getApiBase } from './api'
 import { getDocumentAccessToken } from './wizardStorage'
 
 export function apiUrl(path) {
   const p = path.startsWith('/') ? path : `/${path}`
-  return `${API}${p}`
+  return `${getApiBase()}${p}`
 }
 
 function extractDocumentId(path, bodyDocumentId) {
@@ -32,8 +32,8 @@ export function apiFetch(path, options = {}) {
 
 /** Parse JSON or throw a clear error when the server returned HTML (e.g. API not running). */
 export async function parseJsonResponse(res) {
-  const contentType = res.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) {
+  const contentType = res.headers?.get?.('content-type') || ''
+  if (contentType && !contentType.includes('application/json')) {
     const text = await res.text()
     if (text.trimStart().startsWith('<!') || text.trimStart().toLowerCase().startsWith('<html')) {
       throw new Error('API unavailable — run npm run server (or npm run dev:full).')

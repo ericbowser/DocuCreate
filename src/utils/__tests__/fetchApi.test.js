@@ -2,6 +2,7 @@ import { apiUrl, apiFetch, parseJsonResponse } from '../fetchApi'
 import { saveDocumentAccessToken } from '../wizardStorage'
 
 jest.mock('../api', () => ({
+  getApiBase: () => 'https://api.example.com',
   API: 'https://api.example.com',
 }))
 

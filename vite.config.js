@@ -29,6 +29,16 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    preview: {
+      port: 24333,
+      allowedHosts: ['docu-create.com', 'www.docu-create.com', 'localhost'],
+      proxy: {
+        '/api': {
+          target: `http://localhost:${apiPort}`,
+          changeOrigin: true,
+        },
+      },
+    },
     server: {
       port: 24333,
       // Required when nginx proxies docu-create.com to the Vite dev server (e.g. on Pi).

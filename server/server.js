@@ -20,6 +20,7 @@ import {
   signLease,
   deleteLeasesByDocumentId,
   getSigningArtifacts,
+  signingRecordCount,
 } from './leaseStore.js'
 import {
   createDocument,
@@ -37,8 +38,8 @@ import {
 } from './documentStore.js'
 import { documentRateLimit, unlockRateLimit } from './rateLimit.js'
 import { isDocumentIdOnlyAccess, isRecoveryPasswordEnabled } from './documentAccessPolicy.js'
-import { recordUserDocument, userOwnsDocument, updateDocumentRecord } from './documentOwnership.js'
-import { APP_NAME } from './brand.js'
+import { recordUserDocument, userOwnsDocument, updateDocumentRecord, deleteUserDocument } from './documentOwnership.js'
+import { APP_NAME, SITE_URL } from './brand.js'
 import {
   stripeEnabled,
   isPaymentsEnabled,
@@ -62,10 +63,46 @@ if (isProduction && !process.env.DOCUMENT_ENCRYPTION_KEY) {
 
 const app  = express()
 const PORT = process.env.API_PORT || DEFAULT_API_PORT
-const APP_URL = process.env.APP_URL || 'http://localhost:5173'
+const APP_URL = (process.env.APP_URL || 'http://localhost:5173')
+  .trim()
+  .split(/\s+/)[0]
+  .replace(/\/$/, '')
+
+function isLoopbackHost(value) {
+  return /localhost|127\.0\.0\.1/i.test(String(value || ''))
+}
+
+/** Public site URL for emails and sign links (never localhost when serving docu-create.com). */
+function publicAppUrl(req) {
+  if (APP_URL && !isLoopbackHost(APP_URL)) return APP_URL
+  if (req) {
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+      .split(',')[0]
+      .trim()
+    if (host && !isLoopbackHost(host)) {
+      const proto = String(req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http'))
+        .split(',')[0]
+        .trim()
+      return `${proto}://${host}`.replace(/\/$/, '')
+    }
+  }
+  return isProduction ? SITE_URL : APP_URL
+}
 
 app.use(cors({
-  origin: APP_URL,
+  origin(origin, callback) {
+    if (!origin) return callback(null, true)
+    const allowed = new Set([
+      APP_URL,
+      SITE_URL,
+      'https://docu-create.com',
+      'https://www.docu-create.com',
+      'http://localhost:24333',
+      'http://127.0.0.1:24333',
+    ])
+    if (allowed.has(origin) || isLoopbackHost(origin)) return callback(null, true)
+    callback(null, false)
+  },
   credentials: true,
 }))
 
@@ -293,14 +330,26 @@ app.patch('/api/documents/:id', async (req, res) => {
 // DELETE /api/documents/:id — remove stored lease (document ID is the access token)
 // ─────────────────────────────────────────────────────────────
 app.delete('/api/documents/:id', async (req, res) => {
-  if (!await assertDocumentAccess(req, res, req.params.id)) return
+  const documentId = req.params.id
+  const sessionOwns = Boolean(req.session?.userId && await userOwnsDocument(req.session.userId, documentId))
+  const meta = getDocumentMeta(documentId)
 
-  const meta = getDocumentMeta(req.params.id)
-  if (!meta) return res.status(404).json({ error: 'Document not found' })
+  // Logged-in owners can delete even if the JSON file is already gone (orphaned list row).
+  if (!sessionOwns) {
+    if (!await assertDocumentAccess(req, res, documentId)) return
+  }
+  if (!meta && !sessionOwns) {
+    return res.status(404).json({ error: 'Document not found' })
+  }
 
-  deleteDocument(req.params.id)
-  deleteLeasesByDocumentId(req.params.id)
-  res.json({ deleted: true, documentId: req.params.id })
+  if (meta) deleteDocument(documentId)
+  deleteLeasesByDocumentId(documentId)
+  try {
+    await deleteUserDocument(documentId, req.session?.userId ?? null)
+  } catch (err) {
+    console.error('[documents/delete] failed to remove db row', err.message)
+  }
+  res.json({ deleted: true, documentId })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -410,7 +459,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
 
   if (isPaymentBypassed()) {
     markDocumentPaid(documentId, {})
-    return res.json({ bypassed: true, url: `${APP_URL}/preview/${documentId}` })
+    return res.json({ bypassed: true, url: `${publicAppUrl(req)}/preview/${documentId}` })
   }
 
   if (!stripeEnabled) {
@@ -418,7 +467,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
   }
 
   try {
-    const session = await createCheckoutSession({ documentId, appUrl: APP_URL })
+    const session = await createCheckoutSession({ documentId, appUrl: publicAppUrl(req) })
     res.json({ url: session.url, sessionId: session.id })
   } catch (err) {
     console.error('[/api/stripe/create-checkout-session]', err.message)
@@ -470,6 +519,9 @@ async function sendTenantSigningInvite(data, url, { reminder = false } = {}) {
         </p>
         ${intro}
         ${signButtonHtml(url, 'Review &amp; Sign Lease →')}
+        <p style="color:#6b7280;font-size:12px">If the button does not work, copy this link:<br/>
+          <a href="${url}">${url}</a>
+        </p>
         ${signingEmailFooter()}
       </div>
     `,
@@ -497,6 +549,9 @@ async function sendLandlordSigningInvite(data, url, { reminder = false } = {}) {
         </p>
         ${intro}
         ${signButtonHtml(url, 'Review &amp; Sign as Landlord →')}
+        <p style="color:#6b7280;font-size:12px">If the button does not work, copy this link:<br/>
+          <a href="${url}">${url}</a>
+        </p>
         ${signingEmailFooter()}
       </div>
     `,
@@ -539,8 +594,9 @@ app.post('/api/lease/send', async (req, res) => {
   }
 
   const { tenantToken, landlordToken } = createSigningGroup(data, { documentId: documentId ?? null })
-  const tenantUrl   = `${APP_URL}/sign/${tenantToken}`
-  const landlordUrl = `${APP_URL}/sign/${landlordToken}`
+  const origin = publicAppUrl(req)
+  const tenantUrl   = `${origin}/sign/${tenantToken}`
+  const landlordUrl = `${origin}/sign/${landlordToken}`
 
   try {
     await sendTenantSigningInvite(data, tenantUrl)
@@ -591,8 +647,9 @@ app.post('/api/lease/resend', async (req, res) => {
     return res.status(400).json({ error: 'Missing tenant or landlord email on this lease' })
   }
 
-  const tenantUrl = `${APP_URL}/sign/${group.tenantToken}`
-  const landlordUrl = group.landlordToken ? `${APP_URL}/sign/${group.landlordToken}` : null
+  const origin = publicAppUrl(req)
+  const tenantUrl = `${origin}/sign/${group.tenantToken}`
+  const landlordUrl = group.landlordToken ? `${origin}/sign/${group.landlordToken}` : null
 
   const toEmail = []
   if ((party === 'all' || party === 'tenant') && !group.tenantSigned) toEmail.push('tenant')
@@ -626,7 +683,13 @@ app.post('/api/lease/resend', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/lease/:token', (req, res) => {
   const lease = getLease(req.params.token)
-  if (!lease) return res.status(404).json({ error: 'Lease not found or link has expired.' })
+  if (!lease) {
+    console.warn('[lease/get] token not found', {
+      tokenLength: req.params.token?.length,
+      signingRecords: signingRecordCount(),
+    })
+    return res.status(404).json({ error: 'Lease not found or link has expired.' })
+  }
   res.json(lease)
 })
 
@@ -666,8 +729,9 @@ app.post('/api/lease/:token/sign', async (req, res) => {
   const tokens = lease.signingGroupId ? getSigningTokens(lease.signingGroupId) : []
   const tenantToken = tokens.find(t => t.party === 'tenant')?.token
   const landlordToken = tokens.find(t => t.party === 'landlord')?.token
-  const tenantUrl = tenantToken ? `${APP_URL}/sign/${tenantToken}` : null
-  const landlordUrl = landlordToken ? `${APP_URL}/sign/${landlordToken}` : null
+  const origin = publicAppUrl(req)
+  const tenantUrl = tenantToken ? `${origin}/sign/${tenantToken}` : null
+  const landlordUrl = landlordToken ? `${origin}/sign/${landlordToken}` : null
 
   const summaryHtml = `
     <table style="border-collapse:collapse;width:100%;font-size:13px">
@@ -875,7 +939,9 @@ app.get('/api/health', (req, res) => {
     paymentBypassFlag: envFlagTrue('PAYMENT_BYPASS'),
     paymentsEnabledFlag: envFlagTrue('PAYMENTS_ENABLED'),
     price: getPriceDisplay(),
-    appUrl: APP_URL,
+    appUrl: publicAppUrl(),
+    appUrlConfigured: APP_URL,
+    signingRecords: signingRecordCount(),
     encryptionKeySet: Boolean(process.env.DOCUMENT_ENCRYPTION_KEY),
     documentIdOnlyAccess: isDocumentIdOnlyAccess(),
     recoveryPasswordEnabled: isRecoveryPasswordEnabled(),
@@ -919,6 +985,9 @@ if (unlockedLegacy > 0) {
 app.listen(PORT, () => {
   const accessMode = isDocumentIdOnlyAccess() ? 'document-id only (dev)' : 'access token required'
   console.log(`[docucreate:server] running on port ${PORT} | email: ${emailMode} | payments: ${isPaymentsEnabled() ? 'on' : 'off (free unlock)'} | access: ${accessMode}`)
+  if (isLoopbackHost(APP_URL)) {
+    console.warn(`[config] APP_URL is ${APP_URL} — sign/email links will use ${isProduction ? SITE_URL : 'the request Host header'} on public requests. Set APP_URL=https://docu-create.com on the Pi.`)
+  }
   if (isDocumentIdOnlyAccess()) {
     console.warn('[config] DOCUMENT_ID_ACCESS=true — anyone with a document ID can read/edit that lease. Disable before production.')
   }

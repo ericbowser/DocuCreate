@@ -33,6 +33,20 @@ function persistLeases() {
   fs.writeFileSync(LEASES_FILE, JSON.stringify(Object.fromEntries(leases), null, 2))
 }
 
+function normalizeToken(token) {
+  if (!token || typeof token !== 'string') return ''
+  return token.trim().split(/[/?#]/)[0].toLowerCase()
+}
+
+function reloadLeasesFromDisk() {
+  leases.clear()
+  loadLeases()
+}
+
+export function signingRecordCount() {
+  return leases.size
+}
+
 function computeStatus(lease) {
   const tenantDone = Boolean(lease.tenantSignedAt)
   const landlordDone = Boolean(lease.landlordSignedAt)
@@ -101,7 +115,13 @@ export function createSigningGroup(leaseData, { documentId = null } = {}) {
 }
 
 export function getLease(token) {
-  const lease = leases.get(token)
+  const key = normalizeToken(token)
+  let lease = leases.get(key) || leases.get(token)
+  // Another process (or pm2 cluster worker) may have persisted after this process loaded
+  if (!lease && key) {
+    reloadLeasesFromDisk()
+    lease = leases.get(key) || leases.get(token)
+  }
   if (!lease) return null
 
   const party = lease.party || 'tenant'
@@ -237,7 +257,12 @@ export function deleteLeasesByDocumentId(documentId) {
 }
 
 export function signLease(token, { printedName, signatureData }) {
-  const lease = leases.get(token)
+  const key = normalizeToken(token)
+  let lease = leases.get(key) || leases.get(token)
+  if (!lease && key) {
+    reloadLeasesFromDisk()
+    lease = leases.get(key) || leases.get(token)
+  }
   if (!lease) return null
 
   const party = lease.party || 'tenant'

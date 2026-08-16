@@ -1,7 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import PageMeta from '../components/PageMeta'
 import { apiFetch, parseJsonResponse } from '../utils/fetchApi'
+import { HiOutlineTrash } from '../icons'
+import { getEditingDocumentId, clearSensitiveClientData } from '../utils/wizardStorage'
 
 async function fetchMyDocuments() {
   const res = await apiFetch('/api/my-documents', { credentials: 'include' })
@@ -24,13 +27,38 @@ function statusBadge(status) {
 }
 
 export default function MyDocuments() {
+  const queryClient = useQueryClient()
   const { data, isLoading, isError } = useQuery({
     queryKey: ['my-documents'],
     queryFn: fetchMyDocuments,
     refetchOnMount: 'always',
   })
+  const [confirmId, setConfirmId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
 
   const documents = data?.documents ?? []
+
+  const handleDelete = async (documentId) => {
+    setDeletingId(documentId)
+    setDeleteError(null)
+    try {
+      const res = await apiFetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+        documentId,
+        credentials: 'include',
+      })
+      const json = await parseJsonResponse(res)
+      if (!res.ok) throw new Error(json.error || 'Could not delete lease')
+      if (getEditingDocumentId() === documentId) clearSensitiveClientData()
+      setConfirmId(null)
+      await queryClient.invalidateQueries({ queryKey: ['my-documents'] })
+    } catch (err) {
+      setDeleteError(err.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <>
@@ -47,6 +75,10 @@ export default function MyDocuments() {
               + New Lease
             </Link>
           </div>
+
+          {deleteError && (
+            <p className="alert-error text-sm mb-4">{deleteError}</p>
+          )}
 
           {isLoading && (
             <p className="text-muted text-base">Loading your documents…</p>
@@ -84,6 +116,11 @@ export default function MyDocuments() {
                       {doc.lease_type && <span className="capitalize">{doc.lease_type.replace('-', ' ')} · </span>}
                       {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
+                    {confirmId === doc.document_id && (
+                      <p className="text-xs text-red-700 dark:text-red-300 mt-2">
+                        Delete this lease permanently? Signing links already sent will stop working.
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {statusBadge(doc.status)}
@@ -93,6 +130,36 @@ export default function MyDocuments() {
                     >
                       Open →
                     </Link>
+                    {confirmId === doc.document_id ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(doc.document_id)}
+                          disabled={deletingId === doc.document_id}
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-md text-xs font-medium"
+                        >
+                          {deletingId === doc.document_id ? 'Deleting…' : 'Yes, delete'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmId(null)}
+                          disabled={Boolean(deletingId)}
+                          className="px-3 py-1.5 btn-secondary text-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setConfirmId(doc.document_id); setDeleteError(null) }}
+                        className="text-sm font-medium text-red-700 dark:text-red-300 hover:underline inline-flex items-center gap-1"
+                        aria-label={`Delete ${doc.title || 'lease'}`}
+                      >
+                        <HiOutlineTrash className="w-4 h-4" aria-hidden="true" />
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
